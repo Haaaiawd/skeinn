@@ -1,6 +1,6 @@
-# Contributing to LOOM
+# Contributing to Skeinn
 
-LOOM should become simpler when it changes. A contribution is strongest when it preserves the natural
+Skeinn should become simpler when it changes. A contribution is strongest when it preserves the natural
 human–Agent conversation, keeps project truth inspectable on disk, and proves its effect without adding
 another ritual.
 
@@ -11,8 +11,8 @@ another ritual.
 
    ```bash
    npm test
-   node cli/bin/loom.js --help
-   node cli/bin/loom.js prompts
+   node cli/bin/skeinn.js --help
+   node cli/bin/skeinn.js prompts
    ```
 
 3. Keep a change inside one observable problem. If a contract or stored shape changes, update its design,
@@ -27,9 +27,9 @@ A useful pull request explains:
 - the exact command or artifact that proves the result;
 - any compatibility, migration, or unverified boundary.
 
-Prompt changes must remain visible through `loom prompts` and be reflected in
+Prompt changes must remain visible through `skeinn prompts` and be reflected in
 [`docs/PROMPT_CATALOG.md`](docs/PROMPT_CATALOG.md). Changes that claim better quality need a baseline-relative
-proof; a nicer-looking output alone is not evidence that LOOM caused the improvement.
+proof; a nicer-looking output alone is not evidence that Skeinn caused the improvement.
 
 ## Release checks
 

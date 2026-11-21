@@ -1,10 +1,10 @@
-# LOOM 2 System Design
+# Skeinn 2 System Design
 
 Status: implemented core, evaluation pending independent trials.
 
 ## Product decision
 
-LOOM is for the Agent, not the human. Its job is to make a normal capable Agent substantially better at
+Skeinn is for the Agent, not the human. Its job is to make a normal capable Agent substantially better at
 understanding a personalized project, acquiring the right professional judgment, continuing after context
 loss, and completing real work. The human experience remains natural conversation.
 
@@ -50,7 +50,7 @@ delegated to the Agent, or explicitly skipped by the human after a concrete warn
 
 Markdown stores human-readable project truth. JSON stores machine state that people do not need to edit.
 Important corrections do not leave contradictory truths scattered through the corpus: PROJECT.md maps the
-current whole, `.loom/design/` owns detailed decisions, and DECISIONS.md records consequential supersession
+current whole, `.skeinn/design/` owns detailed decisions, and DECISIONS.md records consequential supersession
 with rationale and impact.
 
 ### Design document graph
@@ -96,11 +96,11 @@ Task is the single execution contract:
   "title": "Implement restartable context",
   "outcome": "A fresh Agent receives only decision-relevant context",
   "done_when": ["A forced-reset transcript resumes correctly"],
-  "boundaries": ["The human never operates LOOM"],
+  "boundaries": ["The human never operates Skeinn"],
   "depends_on": [],
-  "reads": [".loom/PROJECT.md", ".loom/design/context-system.md", ".loom/capabilities/human-agent-interaction.md", "fixtures/reset-case.md"],
+  "reads": [".skeinn/PROJECT.md", ".skeinn/design/context-system.md", ".skeinn/capabilities/human-agent-interaction.md", "fixtures/reset-case.md"],
   "touches": ["cli/src/context.js"],
-  "implements": ".loom/design/context-system.md#Context selection",
+  "implements": ".skeinn/design/context-system.md#Context selection",
   "capability_hooks": [{ "node": "human-agent-interaction#C1", "at": "selecting reset context" }],
   "status": "active",
   "progress": {
@@ -119,12 +119,12 @@ authority, risk, or material cost changes return to the conversation.
 
 New Tasks must make design and capability applicability explicit: use `implements` and `capability_hooks`, or
 record a concrete `design_exemption` / `capability_exemption`. Task start rejects an unclassified active horizon.
-Completion verifies that every declared local `touches` path exists, and `loom check` detects later filesystem drift.
+Completion verifies that every declared local `touches` path exists, and `skeinn check` detects later filesystem drift.
 
 ### One-time Keeper
 
 Keeper is not a recurring role. It is a single isolation test at the transition from shaping to material
-execution. A fresh Agent receives no prior conversation, runs `loom context --keeper`, explains the whole,
+execution. A fresh Agent receives no prior conversation, runs `skeinn context --keeper`, explains the whole,
 selects a first Task, navigates its design documents and professional capabilities, and identifies concrete evidence. Every attempt binds a unique
 fresh-thread `run_id` to the digest frozen by `project ready`. A passing record also carries an explicit independent
 review attestation (`review.mode`, reviewer identity, and isolation evidence); known self-review cannot be recorded as
@@ -132,13 +132,13 @@ passed. This is an auditable host assertion, not cryptographic identity proof. I
 are injected into the main Agent's next context. Revision must change project truth or Task definitions before a
 new digest and fresh Keeper run are allowed. Once passed, normal Task evidence replaces further Keeper ceremony.
 
-If the host lacks subagents, LOOM supplies a one-sentence prompt for a new window. Explicit skip is possible
+If the host lacks subagents, Skeinn supplies a one-sentence prompt for a new window. Explicit skip is possible
 but must preserve a concrete reason and reduced confidence.
 
 ## Runtime structure
 
 ```text
-cli/bin/loom.js       small command router
+cli/bin/skeinn.js       small command router
 cli/src/store.js      state, design, capability, Task, Keeper, context and eval operations
 cli/src/protocol.js   layered Agent prompts and every human-readable template
 cli/test/run-all.js   end-to-end contract tests
@@ -178,7 +178,7 @@ criterion-by-criterion evidence plus existence of every declared local output.
 
 ## Context selection
 
-`loom context` always injects:
+`skeinn context` always injects:
 
 - the stable Agent protocol;
 - compact state counts and open uncertainty;
@@ -195,9 +195,9 @@ It first inspects discoverable workspace facts and permitted tools, researches o
 the task allows it, then records a bounded assumption and chooses a safe reversible action or blocks on
 unavailable authority.
 
-`--state-dir <outside-workspace-dir>` places LOOM's state tree in a per-run sidecar rather than the workspace.
+`--state-dir <outside-workspace-dir>` places Skeinn's state tree in a per-run sidecar rather than the workspace.
 This is for benchmark or sandbox runners whose scored workspace must remain pristine. The sidecar remains
-semantically `.loom/` to LOOM documents and Task references, but initialization does not edit the workspace
+semantically `.skeinn/` to Skeinn documents and Task references, but initialization does not edit the workspace
 or add an AGENTS.md anchor. Every command in that run must receive the same state directory.
 
 When a Task is active, context also injects a short execution protocol. It tells a reset Agent to reconcile
@@ -209,20 +209,20 @@ delivery mechanisms remain conditional on the human request and repository workf
 
 Workspace code paths in `touches` are identified but not automatically copied into context. Full decision
 history is not repeatedly injected because current truth belongs in PROJECT.md and linked design documents.
-`loom context --keeper` includes history, every design document, and every professional capability dossier
+`skeinn context --keeper` includes history, every design document, and every professional capability dossier
 because whole-project coverage and contradiction detection are exactly what the isolated handoff tests.
 
 ## Compatibility decision
 
-LOOM 2 is a major redesign. It does not silently mutate `.loom/v1` projects and does not preserve the old command
+Skeinn 2 is a major redesign. It does not silently mutate `.skeinn/v1` projects and does not preserve the old command
 surface. Encountering a legacy layout produces an explicit migration boundary. Git remains the recovery path;
 an automated semantic migration can be designed only after real v1 projects reveal which history is valuable.
 
 ## Known boundaries
 
 - External capability acquisition is represented but not automated yet; the host Agent performs research.
-- Markdown is intentionally human-editable. LOOM validates file existence and structured state, not prose truth.
-- Keeper independence depends on the host creating a fresh thread or window. LOOM requires and records the
+- Markdown is intentionally human-editable. Skeinn validates file existence and structured state, not prose truth.
+- Keeper independence depends on the host creating a fresh thread or window. Skeinn requires and records the
   host's independent-review attestation but cannot cryptographically prove Agent identity.
 - Evil Eval scaffolding controls experiment design but does not itself launch model runs.
 - A one-time Keeper verifies build-readiness, not the eventual quality of every implementation Task.

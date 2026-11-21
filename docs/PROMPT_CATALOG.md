@@ -1,10 +1,10 @@
-# LOOM Prompt and Message Catalog
+# Skeinn Prompt and Message Catalog
 
-LOOM's prompts are cognitive interfaces, not a collection of role-playing personas. The exact live
+Skeinn's prompts are cognitive interfaces, not a collection of role-playing personas. The exact live
 inventory is emitted by:
 
 ```bash
-loom prompts
+skeinn prompts
 ```
 
 The command is the auditable source of truth. It returns the complete text, placeholders, and composition
@@ -14,15 +14,15 @@ order as JSON, so documentation cannot quietly describe a different prompt from 
 
 | Layer | Message | Injected when | Purpose |
 |---|---|---|---|
-| Stable core | `layers.stable_core` | Every `loom context` | Durable collaboration judgment: user ownership, evidence classes, question threshold, corrections, reversible delegation |
-| Environment adaptation | `layers.environment_adaptation_available` or `layers.environment_adaptation_unavailable` | Every `loom context` | States whether a human can answer; routes uncertainty through inspection, permitted factual research, clarification, bounded assumption, or block |
-| Runtime adaptation | `layers.runtime_protocol` | Every `loom context` | LOOM-specific disk model, document graph, capability boundaries, Work Map, and three production loops |
-| Project state | `layers.project_state` | Every `loom context` | Dynamic status, uncertainty, assumptions, document/capability inventory, Task counts, blocked Tasks with reasons and recovery conditions, and Keeper feedback |
-| Project state after failure | `layers.project_state_after_keeper_failure` | Keeper `needs_revision`/`blocked` | Prior finding text, the repair expectation, and the `loom project ready` → fresh-Keeper retry contract |
+| Stable core | `layers.stable_core` | Every `skeinn context` | Durable collaboration judgment: user ownership, evidence classes, question threshold, corrections, reversible delegation |
+| Environment adaptation | `layers.environment_adaptation_available` or `layers.environment_adaptation_unavailable` | Every `skeinn context` | States whether a human can answer; routes uncertainty through inspection, permitted factual research, clarification, bounded assumption, or block |
+| Runtime adaptation | `layers.runtime_protocol` | Every `skeinn context` | Skeinn-specific disk model, document graph, capability boundaries, Work Map, and three production loops |
+| Project state | `layers.project_state` | Every `skeinn context` | Dynamic status, uncertainty, assumptions, document/capability inventory, Task counts, blocked Tasks with reasons and recovery conditions, and Keeper feedback |
+| Project state after failure | `layers.project_state_after_keeper_failure` | Keeper `needs_revision`/`blocked` | Prior finding text, the repair expectation, and the `skeinn project ready` → fresh-Keeper retry contract |
 | Keeper review of prior failure | `layers.keeper_review_of_prior_failure` | `--keeper` after a failed attempt | The exact prior findings the fresh Keeper must re-verify before passing |
 | Execution protocol | `layers.execution_protocol` | Active Task or `--task` | Recovery, workspace inspection, risk-based testing, progress persistence, exact proof, and delivery boundaries |
 | Current task | `layers.current_task` | Active Task or `--task` | Exact Task JSON followed by the exact contents of every path in `reads` |
-| On-demand map | `layers.on_demand_map` | Every `loom context` | Pointers to decision history, design documents, capability dossiers, and STRUCTURE.md for lazy loading |
+| On-demand map | `layers.on_demand_map` | Every `skeinn context` | Pointers to decision history, design documents, capability dossiers, and STRUCTURE.md for lazy loading |
 | Keeper context | `layers.keeper_context` | `--keeper` | Full decision history, work-map summary, and every design and capability document for whole-corpus audit |
 
 This separation is deliberate. Project-specific expertise does not inflate the stable prompt; it lives in
@@ -37,12 +37,12 @@ be learned.
 ## Workspace and document messages
 
 `workspace_anchor` is the short block added to `AGENTS.md`. It tells an entering or reset Agent to run
-`loom context`, rerun it before editing after an interruption, persist state at meaningful boundaries rather
+`skeinn context`, rerun it before editing after an interruption, persist state at meaningful boundaries rather
 than before every tool call, and keep CLI operation invisible to the human. The anchor is durable-only:
-`loom init` never rewrites existing `AGENTS.md` content, and current mechanics always reach the Agent through
-`loom context` output rather than through the anchor text.
+`skeinn init` never rewrites existing `AGENTS.md` content, and current mechanics always reach the Agent through
+`skeinn context` output rather than through the anchor text.
 
-`templates.project_index` creates `.loom/PROJECT.md` as a concise whole and document map. It explicitly
+`templates.project_index` creates `.skeinn/PROJECT.md` as a concise whole and document map. It explicitly
 prevents a large project's systems from being compressed into one file.
 
 `templates.design_documents` contains all seven live design templates:
@@ -77,28 +77,28 @@ verdicts:
 
 A `passed` verdict must carry independent review provenance (`review.mode: "independent"` plus a
 `reviewer_id` and evidence that a separate Agent ran the review). A self-review or an unattested pass is
-rejected at record time; a legacy unattested pass blocks `task start` and is an error in `loom check` until
-replaced by a fresh review or an explicit `loom keeper skip --reason`.
+rejected at record time; a legacy unattested pass blocks `task start` and is an error in `skeinn check` until
+replaced by a fresh review or an explicit `skeinn keeper skip --reason`.
 
 Findings are cumulative across attempts: a pass must carry `closure_results` with evidence for every gap
 still open from earlier rounds, not only the latest attempt's. A changed project digest proves that
 something changed — never that findings were resolved. There is no auto-pass.
 
 A failed result is injected into the next project-state message. A retry requires changed project truth, a
-new digest, and another fresh Keeper. `loom review --help` describes the staging steps for opening that
+new digest, and another fresh Keeper. `skeinn review --help` describes the staging steps for opening that
 fresh Agent without inherited conversation.
 
 ## Evil Eval messages
 
 `evaluation.baseline_condition` gives a normal capable Agent the identical brief and ordinary tools without
-LOOM. It does not weaken the baseline or prohibit normal planning.
+Skeinn. It does not weaken the baseline or prohibit normal planning.
 
-`evaluation.loom_condition` gives the same brief, model class, tools, workspace facts, and budget, adding only
-LOOM continuity infrastructure and no extra authority.
+`evaluation.skeinn_condition` gives the same brief, model class, tools, workspace facts, and budget, adding only
+Skeinn continuity infrastructure and no extra authority.
 
-`evaluation.unattended_baseline_condition` and `evaluation.unattended_loom_condition` are the same two
-conditions when no user response channel exists. The environment fact is equal in both arms; only the LOOM arm
-uses `loom context --human-channel unavailable`.
+`evaluation.unattended_baseline_condition` and `evaluation.unattended_skeinn_condition` are the same two
+conditions when no user response channel exists. The environment fact is equal in both arms; only the Skeinn arm
+uses `skeinn context --human-channel unavailable`.
 
 `evaluation.blind_judge` scores anonymized output on intent fidelity, question value, whole coverage,
 professional depth, buildability, reset continuity, implementation evidence, human burden, and cost. It
@@ -118,8 +118,8 @@ Task; those are selected when the behavior, human request, or repository workflo
 
 ## CLI operational messages
 
-`loom --help` is the complete command-oriented message surface. `loom review` and `loom review --help` are
-the read-only entry points an Agent uses to stage an independent Keeper handoff; `loom keeper --help` covers
+`skeinn --help` is the complete command-oriented message surface. `skeinn review` and `skeinn review --help` are
+the read-only entry points an Agent uses to stage an independent Keeper handoff; `skeinn keeper --help` covers
 `keeper prompt`, `keeper record`, and `keeper skip`. JSON command results report state and the next
 host action. Validation errors are contract enforcement rather than cognitive prompts; they reject unsafe
 references, template-only readiness, missing design documents, open high-impact uncertainty, unchanged Keeper
@@ -130,10 +130,10 @@ disproven completion or unmet block.
 
 Warning channels are closable rather than permanent: a decision-affected done Task warns only until it is
 reopened and re-completed after the decision, deliverable coverage distinguishes planned from delivered, and
-blocked Tasks surface their recovery conditions in `loom context` until reopened with a concrete reason.
+blocked Tasks surface their recovery conditions in `skeinn context` until reopened with a concrete reason.
 
 The short human fallback when the host cannot create a Keeper Agent remains:
 
 ```text
-Please open a new window in this project, run loom keeper prompt, and follow it.
+Please open a new window in this project, run skeinn keeper prompt, and follow it.
 ```

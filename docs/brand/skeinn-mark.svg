@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Skeinn mark</title>
+  <desc id="desc">Two symmetric open arcs framing a central four-point cobalt core.</desc>
+  <rect x="4" y="4" width="248" height="248" rx="58" fill="#F5F4EF" stroke="#E2DFD5" stroke-width="2"/>
+  <!-- Left continuity arc -->
+  <path d="M 107 63.3 A 68 68 0 0 0 88 183"
+        fill="none" stroke="#17212B" stroke-width="24" stroke-linecap="round"/>
+  <!-- Right continuity arc (180-deg rotational symmetry) -->
+  <path d="M 149 192.7 A 68 68 0 0 0 168 73"
+        fill="none" stroke="#17212B" stroke-width="24" stroke-linecap="round"/>
+  <!-- Central cobalt core -->
+  <path d="M 128 102 Q 132 124 154 128 Q 132 132 128 154 Q 124 132 102 128 Q 124 124 128 102 Z"
+        fill="#3B63F6"/>
+</svg>

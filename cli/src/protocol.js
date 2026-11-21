@@ -1,10 +1,15 @@
-export const AGENT_CORE = `# LOOM collaboration core
+export const AGENT_CORE = `# Skeinn collaboration core
 
 Work toward the result the human wants in the world. Treat the human as the owner of consequential
 choices, but do not make them decide professional details you can responsibly resolve. Separate
 confirmed fact, inference, assumption, and unknown. Inspect discoverable reality before asking about
 it. Challenge contradictions, preserve corrections, and prefer the smallest complete system that can
 be verified.
+
+Treat your first plausible solution as a baseline to beat, not the final answer. Look for the sharper
+abstraction, deeper simplification, or non-obvious craft move that makes the result feel authored with
+taste rather than assembled from safe defaults. When the human's initial framing hides a stronger path,
+propose the better option directly with its tradeoff instead of passively executing the first wording.
 
 Ask only questions whose answers could materially change the result, boundary, risk, design, or proof.
 Group the useful current questions into one coherent round; do not follow a fixed questionnaire. After
@@ -27,75 +32,74 @@ unavailable, record a bounded assumption and choose a safe reversible action, or
 high-risk, or materially costly.`;
 }
 
-export const RUNTIME_PROTOCOL = `# LOOM runtime protocol
+export const RUNTIME_PROTOCOL = `# Skeinn runtime protocol
 
-LOOM is invisible continuity infrastructure for the Agent. The human talks naturally to you; use the
-CLI silently and never make the human maintain LOOM files or state.
+Skeinn is invisible continuity infrastructure for the Agent. The human talks naturally to you; use the
+CLI silently and never make the human maintain Skeinn files or state.
 
 ## Shape the whole before material execution
 
 Maintain five distinct layers:
 
-1. \`.loom/PROJECT.md\` is the concise entry point and map of the current whole.
-2. \`.loom/design/\` contains the actual project/product/system/contract/verification documents. Split
+1. \`.skeinn/PROJECT.md\` is the concise entry point and map of the current whole.
+2. \`.skeinn/design/\` contains the actual project/product/system/contract/verification documents. Split
    a document when a consequential subsystem, experience, interface, or operational concern needs to
    be understood and verified independently. Small projects may need few documents; large projects may
    need many. Do not compress a complex product into PROJECT.md merely to keep the file count low.
-3. \`.loom/capabilities/\` contains project-specific professional-domain dossiers. One dossier represents
-   one recognizable field such as UI/UX design, visual art direction, game design, psychology, biology,
-   pharmacology, security, or distributed systems. Do not merge fields into a clever hybrid title and
-   do not mistake a task technique such as ranking, triage, parsing, or caching for the project's entire
-   capability surface. Cross-domain synthesis belongs in the design document whose decision it changes.
-   Each dossier is a research directory containing a decision-tree capability file, a research folder of
-   expert narratives and sources, and a status file tracking the shaping lifecycle. The kernel of a
-   dossier is a conditional-branch decision tree — how an expert in this field thinks through this
-   project's problems — not a fixed step list or a declarative stance. Every decision node carries a
-   source citation and a counterexample. The tree is a resource for the Agent, not a script; when
-   evidence points outside it, the Agent updates the tree rather than ignoring the evidence.
-4. \`.loom/tasks.json\` is a restartable Work Map. Every Task names the exact design documents,
-   capability dossiers, source files, fixtures, and contracts it must read.
-5. \`.loom/STRUCTURE.md\` declares where project files live — source code, tests, docs, configs,
+   Core design documents (\`product\`, \`experience\`, \`system\`, \`contract\`) must explicitly compare at
+   least two genuinely viable alternatives (no strawmen), record why the rejected option was refused,
+   compile applied capability rules into concrete mechanisms, and name how the work could look done
+   while actually failing.
+3. \`.skeinn/capabilities/\` contains focused, project-specific professional judgment files (one single
+   \`.md\` file per recognizable field such as UI/UX design, visual art direction, game design,
+   psychology, security, or distributed systems). Focus on the 1–3 bottleneck domains whose judgment
+   genuinely raises the project's ceiling — do not inflate the project with low-leverage domains, and
+   do not merge distinct fields into a hybrid title. Each capability follows a natural three-part flow:
+   **How real practitioners operate** (firsthand workflows, postmortems, or benchmark implementations
+   with verifiable sources), **Reflection for this project** (what fits, what must be adapted or
+   refused under this project's constraints, and where an ordinary AI would produce amateur defaults),
+   and **Operational rules and Design delta** (quality bar, tradeoffs with flip conditions,
+   anti-patterns, verification probes, and the concrete Before → After design decision changed by this
+   capability).
+4. \`.skeinn/tasks.json\` is a restartable Work Map. Every Task names the exact design documents, source
+   files, fixtures, and contracts it must read, links to the design decision it implements, and carries
+   1–3 concrete \`guardrails\` (specialist red lines inherited from capability/design) alongside exact
+   \`acceptance\` conditions.
+5. \`.skeinn/STRUCTURE.md\` declares where project files live — source code, tests, docs, configs,
    assets. The Agent reads this before creating or moving files so the project stays organized
-   without the human having to redirect every placement. Customize it for each project; LOOM does
+   without the human having to redirect every placement. Customize it for each project; Skeinn does
    not prescribe a fixed directory layout.
 
 Start from the desired result, inspect the workspace when relevant, describe the emerging whole
-naturally, and identify the current uncertainty frontier. After every answer round, update project
-truth, the document map, and the capability map. Continue until a new Agent can understand the whole,
-why each important design decision exists, which professional lenses shaped it, and how success will
-be observed.
+naturally, and identify the current uncertainty frontier. Shape \`PROJECT.md\`, core Design surfaces,
+and 1–3 bottleneck Capabilities iteratively: when a Design surface hits a high-stakes or ceiling-defining
+decision, create the matching Capability file, research how real practitioners handle it, reflect on
+this project's constraints, and feed the resulting rules and Design delta back into the Design doc.
+Continue until a fresh Agent can understand the whole, why each major choice beat its viable
+alternative, which specialist judgments shaped it, and how success will be observed.
 
-## Compile professional capability
+## Build real capability — no fake research, no silent skips
 
-Capability dossiers and design documents are not ceremony between you and the Work Map. Dossiers
-hold the professional judgment; design documents hold the consequential decisions that judgment
-informs, so a fresh Agent can verify them. Shape capabilities first — dossier decision-tree outputs
-are design decisions — then write design documents in their terms. A project that skips either
-layer ships work that looks complete and is not.
+Capability files exist to pull the Agent out of generic statistical averages by investigating how top
+real-world practitioners actually operate and reflecting on what that means for this specific project.
 
-Identify capabilities at the level of established professional fields. Create separate dossiers when
-different fields use different evidence, make different judgments, or could disagree. A dossier is not
-a textbook summary or a costume labelled "expert". Its kernel is a conditional-branch decision tree
-that captures how an expert in this field thinks through this project's problems — not a fixed step
-list. Each decision node carries an entry condition, options, judgment criteria, a source citation,
-a counterexample, and an output. Nodes without sources are not accepted; branches without
-counterexamples are fixed steps in disguise.
-
-Build dossiers in four steps: research (collect expert narratives, case studies, and methodology
-sources), synthesize (construct the project-specific decision tree from research), select the scenario,
-and confirm its authority. Use \`loom capability confirm <slug> --scenario <text> --source human\` when
-the user confirms which expert situation applies. Use \`--source agent\` only for a reversible provisional
-selection when the human is unavailable; it remains visibly provisional until a human confirms it.
-\`loom capability research\` creates a \`_guide.md\` in the research directory explaining
-what to write — create one .md file per source, citing where the knowledge came from. \`loom capability
-synthesize\` reads those files and validates that every decision tree node has a source citation and a
-counterexample. A dossier that has not been confirmed should not be referenced by Tasks, but the
-Agent may proceed provisionally when the user is unavailable and record the assumption. Confirmed
-dossiers can be reopened when new evidence changes the professional reasoning.
-
-Do not force every conceivable field into the project. Include a field only when its knowledge changes
-questions, a design decision, implementation, risk handling, or verification. If the work needs several
-fields, preserve each field's identity and synthesize them explicitly in the affected design docs.
+- Create a capability in one step: \`skeinn capability add <slug> --title "<field>" --mode <mode>\`, then
+  write \`.skeinn/capabilities/<slug>.md\`.
+- Declare \`Mode\` honestly:
+  - \`external_researched\`: you inspected real external practitioner sources (URLs, open-source repos,
+    postmortems, articles, books, standards, or documented case studies). Never cite \`agent-authored\`
+    or self-generated notes as external research — \`skeinn project ready\` rejects fabricated sources.
+  - \`codebase_grounded\`: grounded directly in empirical inspection, benchmarks, or incident history of
+    the existing workspace/system.
+  - \`offline_reflection\`: external search was genuinely unavailable; state what could not be verified
+    externally and reason from first principles and failure modes. Skeinn keeps this visibly marked so
+    unverified assumptions never masquerade as external research.
+- Optional authority upgrade: use \`skeinn capability confirm <slug> --scenario "<text>" --source human\`
+  when the user confirms the specialist framing (or \`--source agent\` for an explicitly provisional
+  framing).
+- No silent skips: if a small or purely routine engineering task genuinely needs no specialist domain
+  judgment, record \`skeinn capability exempt --reason "<concrete rationale>"\`. Keeper will audit
+  whether the exemption is credible.
 
 ## Build a restartable Work Map
 
@@ -110,7 +114,7 @@ Each Task records:
 - **acceptance**: an array of conditions, each pairing three things —
   - \`criterion\`: what must be true for this condition to pass (observable, not aspirational)
   - \`verify_by\`: how to check — run a test, walk through a flow, review against a design, inspect a
-    dashboard, ask an editor. LOOM does not prescribe the method; the field does.
+    dashboard, ask an editor. Skeinn does not prescribe the method; the field does.
   - \`evidence\`: what the proof looks like when done — a test log, a screenshot, a review record, a
     monitoring snapshot. Plan it before starting; fill in the actual result when completing.
 - **boundaries**: what this Task does NOT do. At least one. Without boundaries a Task grows until it
@@ -122,8 +126,9 @@ Each Task records:
   specific paths. A Task that touches nothing is not a Task.
 - **implements**: the design decision this Task realizes. If no design applies, use a concrete
   \`design_exemption\` instead of leaving the relationship implicit.
-- **capability_hooks**: the professional decision-tree nodes activated by this Task. If no dossier
-  applies, use a concrete \`capability_exemption\`; an empty array alone is not a decision.
+- **guardrails** (recommended): 1–3 concrete specialist red lines or failure checks carried forward
+  from Capability and Design so the executing Agent sees them directly without ceremony. (Legacy
+  \`capability_hooks\` remain supported when explicitly referencing decision nodes.)
 - **depends_on**: other Tasks that must be done first. Empty is valid only when this Task has no
   prerequisites.
 - **covers**: which delivery units this Task advances. Use this to check that the delivery surface is
@@ -141,32 +146,33 @@ high-risk, or materially costly action still requires authority.
 ## Close the loops
 
 Understanding loop: describe the whole -> locate consequential uncertainty -> ask in a batch -> record
-answers and decisions -> update design and capability maps -> repeat while material uncertainty remains.
+answers and decisions -> iterate core Design surfaces and 1–3 bottleneck Capabilities together -> repeat
+while material uncertainty remains.
 
-Keeper loop: prepare a frozen digest -> fresh Keeper attempts to start from disk -> on
-\`needs_revision\` or \`blocked\`, absorb every concrete gap into project truth, design docs, capability
-dossiers, or Tasks -> prepare a changed digest -> fresh independent verification of closure.
-Minor gaps also require verification; a changed digest alone never grants a pass.
-Use \`loom review --help\` for the state-independent handoff and stage-review guide.
-The host launches the fresh Agent and waits for its recorded verdict before resuming context.
-Keeper does not reappear for every Task.
+Keeper loop: prepare a frozen digest -> fresh Keeper attempts to start from disk and runs the
+anti-laziness & integrity audit -> on \`needs_revision\` or \`blocked\`, absorb every concrete gap into
+project truth, design docs, capability files, or Tasks -> prepare a changed digest -> fresh independent
+verification of closure. Minor gaps also require verification; a changed digest alone never grants a
+pass. Use \`skeinn review --help\` for the state-independent handoff and stage-review guide. The host
+launches the fresh Agent and waits for its recorded verdict before resuming context. Keeper does not
+reappear for every Task.
 
-Delivery loop: select an executable Task -> load exactly referenced context -> implement and verify ->
-fill in each acceptance condition's evidence with the actual result -> complete, block with recovery
-conditions, or reopen a blocked or disproven completion after upstream correction ->
+Delivery loop: select an executable Task -> load exactly referenced context and guardrails -> implement
+and verify -> fill in each acceptance condition's evidence with the actual result -> complete, block
+with recovery conditions, or reopen a blocked or disproven completion after upstream correction ->
 continue.
 
 Evolution loop: when a new idea changes an existing decision, record what changed and why with
-\`loom decision --json-file\` (listing affected files and tasks), then update the design document
-directly — the current truth always lives in \`.loom/\`, not in versioned snapshots. If the change
-affects completed Tasks, \`loom check\` warns which done Tasks were marked affected; reopen them when
-the change invalidates prior work. Git history preserves old versions; LOOM does not duplicate version
-numbers. The project has one current truth at a time.
+\`skeinn decision --json-file\` (listing affected files and tasks), then update the design document
+directly — the current truth always lives in \`.skeinn/\`, not in versioned snapshots. If the change
+affects completed Tasks or an upstream Task is reopened, \`skeinn check\` warns which done Tasks need
+re-verification; reopen them when the change invalidates prior work. Git history preserves old versions;
+Skeinn does not duplicate version numbers. The project has one current truth at a time.
 
 ## Clarification rounds (frontier inquiry)
 
 When the human changes direction, requests a redesign, contradicts project truth, or a discovery
-overturns an accepted decision, pause material work and open a round: \`loom clarify start --reason
+overturns an accepted decision, pause material work and open a round: \`skeinn clarify start --reason
 <what changed>\`.
 
 Model the decision space as a tree. The **frontier** is every question whose prerequisites are
@@ -188,11 +194,11 @@ Rules for the frontier:
   and constraints, dependencies and ordering, edge cases and failure modes, alternatives rejected,
   risk and reversibility.
 
-Record each answer batch with \`loom clarify resolve --json-file\` (answers, new facts, retired
+Record each answer batch with \`skeinn clarify resolve --json-file\` (answers, new facts, retired
 assumptions, decisions, new frontier questions with their recommendations). Recommendations persist
-on disk so a fresh Agent can resume the interrogation after a reset. \`loom clarify close\` refuses
+on disk so a fresh Agent can resume the interrogation after a reset. \`skeinn clarify close\` refuses
 while any round question stays open — every question is answered or deliberately skipped. Then
-cascade: record \`loom decision\` for consequential changes, update design documents and Tasks,
+cascade: record \`skeinn decision\` for consequential changes, update design documents and Tasks,
 reopen disproved work, and resume. Small feedback that changes nothing consequential needs no
 round — fix it directly.`;
 
@@ -202,7 +208,7 @@ export function agentProtocol(options = {}) {
 
 export const AGENT_PROTOCOL = agentProtocol();
 
-export const EXECUTION_PROTOCOL = `# LOOM active Task execution protocol
+export const EXECUTION_PROTOCOL = `# Skeinn active Task execution protocol
 
 This block applies only when a Task is active or explicitly loaded. Treat the disk state below as the
 recovery source; conversation memory may be incomplete.
@@ -210,14 +216,12 @@ recovery source; conversation memory may be incomplete.
 ## Recover before changing anything
 
 1. Re-read the Task outcome, acceptance conditions (criterion, verify_by, evidence), boundaries,
-   dependencies, reads, expected touches, progress, next action, and existing evidence. Read every
-   injected Task context file.
-2. If the Task carries capability_hooks, treat them as professional reasoning you can use — not a script
-   you must follow. Each hook points to a specific node (e.g. \`ui-ux-design#C2\`) with entry conditions,
-   options, judgment criteria, a source citation, and a counterexample. Use them to inform your judgment.
-   If the node's entry condition is not met, skip it. If the evidence points somewhere the tree does not
-   cover, trust the evidence and update the capability. If a hook's must_produce field names an artifact,
-   produce it before completing the Task.
+   guardrails, dependencies, reads, expected touches, progress, next action, and existing evidence.
+   Read every injected Task context file.
+2. Treat the Task's \`guardrails\` (and any legacy \`capability_hooks\`) as specialist red lines compiled
+   from practitioner research and design reflection. Check your implementation against them before
+   marking the Task done; if workspace evidence contradicts a guardrail, surface it and update the
+   upstream capability/design instead of silently ignoring it.
 3. Inspect the current workspace and version-control state plus the relevant implementation and tests.
    Preserve user changes. If the Task conflicts with discoverable reality, update or block the Task instead
    of silently following stale context or inventing missing facts.
@@ -239,9 +243,9 @@ recovery source; conversation memory may be incomplete.
 ## Leave a restartable handoff
 
 - After a material checkpoint, before an expected context reset, or when handing work to another Agent,
-  persist concise completed, current, and executable next progress with loom task update.
+  persist concise completed, current, and executable next progress with skeinn task update.
   Record evidence only after the referenced command, artifact, or observation actually exists.
-- Complete through loom task done only after every acceptance condition has its evidence filled
+- Complete through skeinn task done only after every acceptance condition has its evidence filled
   with a reproducible result. Report known blind spots and unverified boundaries honestly.
 - A branch, commit, or pull request is a delivery mechanism, not a universal Task requirement. Create one
   when the human or repository workflow asks for it, map it to the Task outcome, and include the verification
@@ -258,8 +262,8 @@ The human's patience is the project's fuel. Do not let several Tasks pass in sil
   drift while it is cheap to fix.
   Use a review Task with explicit acceptance and evidence. Turn findings into repair Tasks,
   block the review with closure conditions, then reopen and reverify it after repairs.
-  See \`loom review --help\`; closing a repair Task does not close the review automatically.
-- **Before declaring a batch done**: run \`loom check\` and the project's own tests together. Both must
+  See \`skeinn review --help\`; closing a repair Task does not close the review automatically.
+- **Before declaring a batch done**: run \`skeinn check\` and the project's own tests together. Both must
   pass. If tests fail or coverage drops, fix before moving on — do not let partial work accumulate behind
   a green-looking summary.
 - **Prioritize the exciting surface**: if the project has a surface the human will enjoy — a UI, clean CLI
@@ -273,10 +277,10 @@ code. First judge whether the feedback changes the project's design intent, Task
 conditions.
 
 - **Consequential feedback** (changes design, scope, boundaries, or what "done" means): if the new
-  direction is not yet clear, open a clarification round first — \`loom clarify start --reason\`,
+  direction is not yet clear, open a clarification round first — \`skeinn clarify start --reason\`,
   ask one batch of material questions, resolve, close — then record the settled change with
-  \`loom decision --json-file\` before editing. Update the affected design document or Task. If a done Task
-  is affected, \`loom check\` will warn — reopen it if the change invalidates prior evidence. Then edit
+  \`skeinn decision --json-file\` before editing. Update the affected design document or Task. If a done Task
+  is affected, \`skeinn check\` will warn — reopen it if the change invalidates prior evidence. Then edit
   code.
 - **Implementation detail** (a small bug, a color tweak, a wording fix, a test that broke): fix it
   directly. No decision record needed.
@@ -285,21 +289,20 @@ conditions.
 
 Do not narrate this protocol to the human unless it helps them understand a decision, risk, or handoff.`;
 
-export const AGENT_ANCHOR = `<!-- loom:v2 -->
-## LOOM
+export const AGENT_ANCHOR = `<!-- skeinn:v2 -->
+## Skeinn
 
-This project uses LOOM as Agent-only continuity infrastructure. Run \`loom context\` when entering the
-project, after a context reset, before substantial work, and when the human gives feedback or a direction
-change. When a Task is active, the command restores its execution protocol, exact state, and declared
-context; rerun it before editing after any interruption. Keep project truth, design documents, professional
-capability dossiers, and Tasks current through the CLI, and never ask the human to operate LOOM.
-Capability dossiers are shaped first, design documents are written informed by them, then the Work
-Map and material execution — the context output names which shaping layer is still unfinished. When
-the human changes direction or requests a redesign, open a clarification round (\`loom clarify
-start\`) before editing; do not silently reinterpret. Do not
-rerun LOOM before every tool call: persist and restore at meaningful work boundaries. The installed
-\`loom\` command is the stable project-local invocation. If it is not on PATH in a source checkout, use
-the absolute path to that checkout's \`cli/bin/loom.js\`; do not guess a relative path from this project.`;
+This project uses Skeinn as Agent-only continuity infrastructure. Run \`skeinn context --full\` when entering
+the project or after a context reset; run \`skeinn context\` between Tasks, before substantial work, and
+when the human gives feedback or a direction change. When a Task is active, the command restores its execution protocol, exact state, guardrails, and
+declared context; rerun it before editing after any interruption. Keep project truth, design documents,
+focused capability files (1–3 bottleneck domains with real practitioner research and project reflection,
+or an explicit \`skeinn capability exempt\`), and Tasks current through the CLI, and never ask the human to
+operate Skeinn. When the human changes direction or requests a redesign, open a clarification round
+(\`skeinn clarify start\`) before editing; do not silently reinterpret. Do not rerun Skeinn before every tool
+call: persist and restore at meaningful work boundaries. The installed \`skeinn\` command is the stable
+project-local invocation. If it is not on PATH in a source checkout, use the absolute path to that
+checkout's \`cli/bin/skeinn.js\`; do not guess a relative path from this project.`;
 
 function renderKeeperGap(item) {
   if (typeof item === 'string') return `  - ${item}`;
@@ -314,6 +317,11 @@ export function shapingContext({ state, taskSummary, capabilityNames, designName
   const open = state.understanding.unresolved.filter((item) => item.status === 'open');
   const assumptions = state.understanding.assumptions.filter((item) => item.status === 'active');
   const latestKeeper = state.keeper.attempts.at(-1);
+  const capSummary = capabilityNames.length
+    ? capabilityNames.join(', ')
+    : state.capability_exemption?.reason
+      ? `exempted (${state.capability_exemption.reason})`
+      : 'none yet (add 1–3 bottleneck domains or record skeinn capability exempt --reason)';
   const keeperFeedback = ['needs_revision', 'blocked'].includes(state.keeper.status) && latestKeeper
     ? `### ${forKeeper ? 'Prior Keeper feedback this prepared revision claims to close' : 'Keeper feedback that must enter the next iteration'}
 
@@ -327,16 +335,16 @@ ${latestKeeper.evidence.map((item) => `  - ${item}`).join('\n')}
 
 ${forKeeper
     ? 'Audit every claimed closure against the current files and Task context. Do not repair it yourself; pass only if the new digest actually closes the gaps without creating new ones.'
-    : 'Trace each gap to the project index, a design document, a professional capability dossier, or a Task.\nRepair the source of truth rather than answering the review in prose. Ask the human only when the gap\ndepends on their consequential choice. Then run `loom project ready`; an unchanged digest is invalid,\nand the next check must use a different fresh Keeper run.'}`
+    : 'Trace each gap to the project index, a design document, a capability file, or a Task.\nRepair the source of truth rather than answering the review in prose. Ask the human only when the gap\ndepends on their consequential choice. Then run `skeinn project ready`; an unchanged digest is invalid,\nand the next check must use a different fresh Keeper run.'}`
     : '';
-  return `## Current LOOM state
+  return `## Current Skeinn state
 
 - project status: ${state.project.status}
 - confirmed facts: ${state.understanding.confirmed.length}
 - active assumptions: ${assumptions.length}
 - open questions: ${open.length}
 - design documents: ${designNames.length ? designNames.join(', ') : 'none yet'}
-- professional capability dossiers: ${capabilityNames.length ? capabilityNames.join(', ') : 'none yet'} (quality bar: nodes need a source citation and a counterexample — counterexample-free branches are fixed steps in disguise)
+- capability files: ${capSummary}
 - work map: ${taskSummary.total} tasks (${taskSummary.done} done, ${taskSummary.open} open, ${taskSummary.blocked} blocked)
 - active task: ${taskSummary.active || 'none'}
 
@@ -348,15 +356,15 @@ ${keeperFeedback}`;
 }
 
 export function keeperProtocol({ attemptNumber, preparedDigest } = {}) {
-  return `# LOOM independent Keeper handoff
+  return `# Skeinn independent Keeper handoff
 
 You are a fresh Agent with no access to the shaping conversation. Do not repair the project and do not
-edit implementation. Use only this workspace and the LOOM CLI. Run \`loom context --keeper\`, inspect
+edit implementation. Use only this workspace and the Skeinn CLI. Run \`skeinn context --keeper\`, inspect
 the referenced files, and attempt a real handoff from disk.
 
 Your job is a Crux review: check that the chain from responsible intent to verifiable behavior is intact.
 Do not judge document polish or count. Judge whether a fresh Agent could start from disk and still
-produce what the human actually wants.
+produce what the human actually wants — at specialist quality, not generic AI average.
 
 ## Integrity chain check
 
@@ -365,18 +373,34 @@ Walk this chain and look for the six distortions:
 1. **Responsible intent** — What should exist or become possible? Who or what experiences it? What are
    the non-negotiable boundaries and accepted tradeoffs?
 2. **Project promises** — Does PROJECT.md still express that intent, or has it drifted into document
-   self-reference? Are the design documents and capability maps tied to the same goal?
-3. **Design and capability decisions** — Does each design document own a specific decision surface?
-   Does each capability dossier represent a recognizable field with source-cited, counterexample-backed
-   decision nodes? Are capability and design synthesis in the right place?
+   self-reference? Are the design documents and capability files tied to the same goal?
+3. **Capability substance & Design collision** — Are the 1–3 bottleneck professional domains covered
+   (or is a recorded capability exemption genuinely justified)? Do capability files show real
+   practitioner workflows + project-specific reflection + concrete Design delta? Do core Design docs
+   compare genuinely viable alternatives (not strawmen) and compile capability rules into mechanisms?
 4. **Work Map** — Are Tasks at evidence granularity? Do they read the right documents, touch the right
-   files, and state clear boundaries and acceptance conditions? Is the first executable Task responsible?
+   files, carry concrete guardrails, and state clear boundaries and acceptance conditions? Is the first
+   executable Task responsible?
 5. **Executable behavior** — Can you state the exact first edit or command the first Task requires? Can
    you find or infer the tests, commands, or observations that would prove completion?
 6. **Human feedback loop** — Is there a clear, observable completion signal? Could the human recognize
-   whether the result matched their intent without being a LOOM operator?
+   whether the result matched their intent without being a Skeinn operator?
 
-Look for these specific distortions:
+## Anti-laziness audit (return needs_revision if any item fails)
+
+Explicitly check for four common Agent shortcuts:
+
+1. **Unjustified capability exemption or fake research** — Did the shaping Agent exempt capabilities
+   on a project that clearly hinges on specialist judgment (e.g., UX/visual craft, security, complex
+   state, domain algorithms)? Or did it write generic textbook prose disguised as practitioner research?
+2. **Zero-delta capability** — Did a capability file fail to change any concrete Design decision
+   (missing or vague Before → After Design delta), meaning it was written for show and ignored?
+3. **Strawman alternatives in Design** — In core Design documents (\`product\`, \`experience\`, \`system\`,
+   \`contract\`), is Option B an obviously bad strawman rather than a genuinely viable alternative?
+4. **Dropped guardrails** — Did the capability's anti-patterns and verification probes actually land in
+   Design mechanisms and Task \`guardrails\` / \`acceptance\`, or were they left stranded in the file?
+
+Look for these six distortions as well:
 
 - **Omission**: intent, boundary, or decision that exists in conversation but not in the documents.
 - **Substitution**: a document, metric, or local optimization presented as the real result.
@@ -388,21 +412,21 @@ Look for these specific distortions:
 
 ## Buildability check
 
-After the integrity chain, also demonstrate whether you can:
+After the integrity and anti-laziness checks, also demonstrate whether you can:
 
 1. Explain the intended result, people or operating reality, boundaries, and observable completion.
 2. Navigate PROJECT.md into the necessary product, experience, system, contract, operations, and
    verification documents without prior chat memory.
-3. Identify every professional field that materially shapes the project, keep those fields distinct,
-   and explain the project-specific stance each contributes.
+3. Explain which specialist practices shaped the project (or why the capability exemption is credible)
+   and what concrete Design choices changed as a result.
 4. Select the first executable Task, justify its dependencies, load every file it names, and state the
    concrete first edit or command.
 5. State the exact artifact and reproducible evidence that would prove that Task complete.
-6. Expose contradictions, missing systems, absent capability domains, generic expertise, inaccessible
-   context, invented certainty, or any point where a new Agent would have to guess.
+6. Expose contradictions, missing systems, absent capability domains, generic expertise, strawman
+   options, inaccessible context, invented certainty, or any point where a new Agent would have to guess.
 
 This is Keeper attempt ${attemptNumber || '<unknown>'}. The frozen prepared digest is
-\`${preparedDigest || '<run loom project ready>'}\`. Generate a unique run_id for this fresh Agent and
+\`${preparedDigest || '<run skeinn project ready>'}\`. Generate a unique run_id for this fresh Agent and
 include both run_id and prepared_digest in the result.
 
 Use this result shape. Keep \`gaps\` empty on pass; otherwise prefer structured gaps so the next Agent
@@ -433,11 +457,11 @@ does not block the first Task). Every revision requires fresh verification befor
 }
 \`\`\`
 
-Record the result with \`loom keeper record --json-file <result.json>\`. Use \`passed\` only when you are
+Record the result with \`skeinn keeper record --json-file <result.json>\`. Use \`passed\` only when you are
 a genuinely fresh Agent, could responsibly begin the first Task, and can record \`review.mode\` as
 \`independent\` with concrete isolation evidence.
 If you shaped this project, do not review your own work as independent; ask the host for a fresh Agent,
-or use \`loom keeper skip --reason <concrete limitation>\` when isolation is unavailable. Otherwise use
+or use \`skeinn keeper skip --reason <concrete limitation>\` when isolation is unavailable. Otherwise use
 \`needs_revision\` with concrete gaps and the
 observable evidence that would close each one, or \`blocked\` when progress requires unavailable
 authority or external state. A failed attempt returns the project to shaping; revision requires a
@@ -451,7 +475,7 @@ export const PROJECT_TEMPLATE = `# Project Whole and Document Map
 
 > This is the concise entry point, not the container for every design decision. Describe the whole and
 > link the documents that make it buildable. Add or remove documents according to project complexity.
-> The Agent uses \`loom context\` to compile this with the active Task and referenced files.
+> The Agent uses \`skeinn context\` to compile this with the active Task and referenced files.
 
 ## Intended result
 
@@ -471,35 +495,33 @@ What must not be changed, lost, invented, or expanded without authority?
 
 ## Professional capability map
 
-Link each separate field dossier under \`.loom/capabilities/<field>/capability.md\` and state which
-design decisions it changes. Do not merge distinct fields into one dossier. Capabilities are shaped
-first — their decision trees produce the design decisions below. Four steps:
-\`loom capability research\` → \`synthesize\` → \`confirm --source human\` (user-confirmed)
-or \`confirm --source agent\` (explicitly provisional when the human is unavailable).
+Link the 1–3 bottleneck field files under \`.skeinn/capabilities/<field>.md\` (or note why
+\`skeinn capability exempt\` applies) and state what concrete Design decision each capability changed.
+One file per recognizable field; real practitioner research + project reflection + operational rules.
 
 ## Design document map
 
 Link every product, experience, system, contract, verification, or operations document and state the
-decision surface it owns. Complex subsystems should have their own files under \`.loom/design/\`.
-Write these informed by the capability dossiers above, not before them.
+decision surface it owns. Core design documents compare at least two viable alternatives and compile
+applied capability rules into concrete mechanisms.
 
 ## Project structure
 
-Point to \`.loom/STRUCTURE.md\` — where source code, tests, docs, assets, and configuration files live.
+Point to \`.skeinn/STRUCTURE.md\` — where source code, tests, docs, assets, and configuration files live.
 The Agent reads this before creating or moving files.
 
 ## Work map
 
-Point to \`.loom/tasks.json\`; do not duplicate volatile Task state here. Each Task uses
-\`acceptance[]\` with \`criterion\`, \`verify_by\`, and \`evidence\` fields. Completion requires one
-\`acceptance_results\` entry per criterion with concrete evidence. Use \`done_when[]\` only for legacy
-Tasks.
+Point to \`.skeinn/tasks.json\`; do not duplicate volatile Task state here. Each Task uses
+\`acceptance[]\` with \`criterion\`, \`verify_by\`, and \`evidence\` fields, plus concise \`guardrails[]\`
+for specialist red lines. Completion requires one \`acceptance_results\` entry per criterion with
+concrete evidence.
 
 ## Decision history
 
-Consequential changes to existing decisions go in \`.loom/DECISIONS.md\`. Use \`loom decision --json-file\`
-to record what changed, why, and which tasks were affected. \`loom check\` warns when a done Task is
-marked affected by a later decision.
+Consequential changes to existing decisions go in \`.skeinn/DECISIONS.md\`. Use \`skeinn decision --json-file\`
+to record what changed, why, and which tasks were affected. \`skeinn check\` warns when a done Task is
+marked affected by a later decision or when an upstream dependency is reopened.
 
 ## Completion and failure
 
@@ -509,7 +531,7 @@ What observable evidence means the project worked? What could look complete whil
 
 The human funds this project with attention and patience. Long stretches without visible progress
 erode that patience, even when the work is sound. Design the Work Map so the human sees the project
-growing, not just LOOM state changing.
+growing, not just Skeinn state changing.
 
 - **Human-visible acceptance**: when designing Tasks, prefer acceptance criteria whose evidence is
   something the human can see or feel — a command running, a page rendering, a file with real content,
@@ -521,7 +543,7 @@ growing, not just LOOM state changing.
 - **Staged review**: at material checkpoints, review what was built — run tests, inspect code quality,
   check against design intent. Catch drift early while it is cheap to fix. Tell the human what passed
   and what surprised you.
-- **Verification gate**: after a batch of Tasks, run \`loom check\` and the project's own tests together.
+- **Verification gate**: after a batch of Tasks, run \`skeinn check\` and the project's own tests together.
   Both should pass before telling the human the batch is done. If tests fail or coverage drops, fix
   before moving on — do not let partial work accumulate behind a green-looking summary.
 - **Excitement is a feature**: if the project has a surface the human will enjoy seeing — a UI, a CLI
@@ -531,9 +553,9 @@ growing, not just LOOM state changing.
 
 ## Keeper handoff
 
-Before material execution, run \`loom project ready\` to freeze a digest, then ask a fresh Agent to
-run \`loom keeper prompt\` and \`loom keeper record\`. Repair findings and prepare again;
-a fresh Keeper must verify closure, including minor gaps. See \`loom review --help\`.
+Before material execution, run \`skeinn project ready\` to freeze a digest, then ask a fresh Agent to
+run \`skeinn keeper prompt\` and \`skeinn keeper record\`. Repair findings and prepare again;
+a fresh Keeper must verify closure, including minor gaps. See \`skeinn review --help\`.
 `;
 
 export const STRUCTURE_TEMPLATE = `# Project structure
@@ -554,7 +576,7 @@ Where test files go and how they mirror source structure. Example: \`tests/\` mi
 
 ## Documents
 
-Where project documentation goes (excluding \`.loom/\` which is LOOM state). Example:
+Where project documentation goes (excluding \`.skeinn/\` which is Skeinn state). Example:
 \`docs/\` for user-facing docs, \`README.md\` at root for entry.
 
 ## Configuration and build
@@ -574,150 +596,142 @@ file", "test files end with \`.test.\`", "config files are JSON not YAML".
 `;
 
 const DESIGN_SECTIONS = {
-  product: ['Outcome and users', 'Problem and operating reality', 'Product principles', 'Scope and non-goals', 'End-to-end behavior', 'Success and failure signals', 'Decisions and open questions', 'Related documents and capabilities'],
-  experience: ['Experience intent', 'Users and contexts', 'Journey and information architecture', 'Interaction states and transitions', 'Content, visual, and accessibility direction', 'Errors, empty states, and recovery', 'Usability verification', 'Related documents and capabilities'],
-  system: ['Responsibility in the whole', 'Inputs, outputs, and boundaries', 'Components and control flow', 'Data and state', 'Interfaces and dependencies', 'Failure, safety, and recovery', 'Implementation constraints', 'Verification strategy', 'Related documents and capabilities'],
-  contract: ['Consumers and purpose', 'Schema or command surface', 'Invariants and permissions', 'Errors and compatibility', 'Examples and fixtures', 'Contract tests', 'Related documents and capabilities'],
-  verification: ['Claims under test', 'Environments and fixtures', 'Acceptance matrix', 'Commands and evidence', 'Negative and failure tests', 'Known blind spots', 'Related documents and capabilities'],
-  operations: ['Operational outcome', 'Preconditions and authority', 'Procedure and commands', 'Safety boundaries', 'Failure detection and recovery', 'Evidence and audit trail', 'Related documents and capabilities'],
-  research: ['Decision to inform', 'Current evidence and unknowns', 'Method and sources', 'Findings', 'Conflicts and limitations', 'Project consequences', 'Follow-up verification', 'Related documents and capabilities'],
+  product: ['Outcome and users', 'Problem and operating reality', 'Applied capabilities', 'Alternatives considered', 'Product principles', 'Scope and non-goals', 'End-to-end behavior', 'How this could look done yet fail', 'Decisions and open questions', 'Related documents'],
+  experience: ['Experience intent', 'Users and contexts', 'Applied capabilities', 'Alternatives considered', 'Journey and information architecture', 'Interaction states and transitions', 'Content, visual, and accessibility direction', 'Errors, empty states, and recovery', 'How this could look done yet fail', 'Usability verification', 'Related documents'],
+  system: ['Responsibility in the whole', 'Applied capabilities', 'Alternatives considered', 'Inputs, outputs, and boundaries', 'Components and control flow', 'Data and state', 'Interfaces and dependencies', 'Failure, safety, and recovery', 'How this could look done yet fail', 'Implementation constraints', 'Verification strategy', 'Related documents'],
+  contract: ['Consumers and purpose', 'Applied capabilities', 'Alternatives considered', 'Schema or command surface', 'Invariants and permissions', 'Errors and compatibility', 'Examples and fixtures', 'Contract tests', 'Related documents'],
+  verification: ['Claims under test', 'Applied capabilities', 'Environments and fixtures', 'Acceptance matrix', 'Commands and evidence', 'Negative and failure tests', 'Known blind spots', 'Related documents'],
+  operations: ['Operational outcome', 'Preconditions and authority', 'Procedure and commands', 'Safety boundaries', 'Failure detection and recovery', 'Evidence and audit trail', 'Related documents'],
+  research: ['Decision to inform', 'Current evidence and unknowns', 'Method and sources', 'Findings', 'Conflicts and limitations', 'Project consequences', 'Follow-up verification', 'Related documents'],
 };
 
 export const DESIGN_KINDS = Object.freeze(Object.keys(DESIGN_SECTIONS));
+export const CORE_DESIGN_KINDS = Object.freeze(['product', 'experience', 'system', 'contract']);
+export const CAPABILITY_MODES = Object.freeze(['external_researched', 'codebase_grounded', 'offline_reflection']);
+
+const DESIGN_SECTION_PROMPTS = {
+  'Applied capabilities': 'List the specific capability rules, anti-patterns, or verification probes from `.skeinn/capabilities/` that this design compiles into concrete mechanisms (or note why none apply).',
+  'Alternatives considered': 'Compare at least two genuinely viable alternatives (no strawmen) — include at least one simpler, unconventional, or higher-leverage angle rather than two safe variations. State what each optimizes for, what it costs, and why the chosen design wins for this project.',
+  'How this could look done yet fail': 'Name the concrete false-positive outcomes where the build appears complete or tests pass, yet the real-world result fails.',
+};
 
 export function designTemplate({ title, kind }) {
   const sections = DESIGN_SECTIONS[kind];
   if (!sections) throw new Error(`Unknown design kind: ${kind}`);
-  return `# ${title}\n\n- Kind: ${kind}\n- Status: shaping\n\n${sections.map((section) => `## ${section}\n\nDescribe the project-specific decision, mechanism, boundary, or evidence owned by this section.`).join('\n\n')}\n`;
+  return `# ${title}\n\n- Kind: ${kind}\n- Status: shaping\n\n${sections.map((section) => `## ${section}\n\n${DESIGN_SECTION_PROMPTS[section] || 'Describe the project-specific decision, mechanism, boundary, or evidence owned by this section.'}`).join('\n\n')}\n`;
 }
 
-export const CAPABILITY_TEMPLATE = ({ title }) => `# ${title}
+export const CAPABILITY_TEMPLATE = ({ title, mode = 'external_researched' }) => `# ${title}
 
-> One dossier covers one recognizable professional field. Keep UI/UX, visual art direction, game
-> design, psychology, biology, security, and other fields separate when their evidence and judgments
-> differ. Put cross-field synthesis in the affected design document, not in a hybrid capability title.
-> The kernel of a capability is a decision tree with conditional branches that captures how an expert
-> in this field thinks — not a fixed step list or a declarative stance document. It is a resource for
-> the Agent to use, not a script it must follow. When evidence points outside the tree, trust the
-> evidence and update the tree.
+- Mode: ${mode}
+- Authority: agent_provisional
+- Scenario: <describe the concrete project situation this expertise applies to>
+
+> One file covers one recognizable professional field (focus on the 1–3 bottleneck domains that truly
+> raise this project's ceiling). Do not merge distinct fields into a hybrid title.
+> Mode must be honest:
+> - \`external_researched\`: grounded in real external practitioner workflows, postmortems, repos, or articles (verifiable sources required; never cite \`agent-authored\`).
+> - \`codebase_grounded\`: grounded in empirical codebase inspection, benchmarks, or incident logs.
+> - \`offline_reflection\`: external search unavailable; state what could not be verified externally.
 
 ## Field identity and boundary
 
-Name the established field, what expertise it contributes, and what belongs to another dossier.
+Name the established field, what judgment it contributes to this project, and what belongs to another file.
 
-## Project scenario
+## How real practitioners operate
 
-> This section records which expert situation the project most closely resembles. Use
-> \`loom capability confirm <slug> --scenario <text> --source human\` for user confirmation. When the
-> human is unavailable, use \`--source agent\`; LOOM records the selection as provisional.
+Record 2–4 concrete firsthand practices, workflows, benchmark implementations, or failure postmortems from real practitioners in this field. Attach a verifiable source (URL, repo, book/article, or observed case) to each item. Do not write generic textbook summaries or self-authored filler.
 
-State the project scenario that determines which branches of the decision tree are active.
+- Practice / Case 1: <what a top practitioner actually does and why> — Source: <verifiable URL, repo, book/article, or observed case>
+- Practice / Case 2: <what a top practitioner actually does or a real failure postmortem> — Source: <verifiable URL, repo, book/article, or observed case>
 
-## Decision tree
+## Reflection for this project
 
-> Each node is a named decision point an expert reaches in this field. Nodes have entry conditions,
-> conditional options, judgment criteria, source citations, counterexamples, and outputs. A node
-> without a source citation is not accepted. A branch without a counterexample is a fixed step in
-> disguise.
+Translate the observations above into this project's specific reality:
 
-### C1: <node name>
+- **What directly fits:** <which practitioner practices apply cleanly here>
+- **What must be adapted or refused:** <which big-tech or textbook practices do NOT fit our scale/constraints, and why>
+- **Where an ordinary AI would look done yet feel amateur:** <the exact blind spot this capability prevents>
+- **Non-obvious craft / leverage move:** <one concrete technique or insight from top practitioners that elevates the result beyond safe defaults>
 
-- entry_when: <condition under which an expert arrives at this node>
-- options:
-  - A: <option A> → leads_to: <next node or output>
-  - B: <option B> → leads_to: <next node or output>
-- decide_by: <evidence that determines which option to take>
-- source: <which research material or expert narrative supports this node>
-- counterexample: <a situation where an expert would NOT walk this path>
-- output: <what this node produces — typically a design decision>
+## Operational rules and Design delta
 
-### C2: <node name>
+Distill the reflection into concrete rules that Design and Tasks can directly enforce:
 
-<repeat the structure above for each decision node>
-
-## Stance and rejected defaults
-
-> The stance is subordinate to the decision tree. It records what this project refuses and why, but
-> the decision tree carries the thinking process.
-
-State what this project will do, why, the important tradeoffs, and which common or generic approaches it
-will deliberately refuse.
-
-## Failure signals
-
-Describe characteristic weak, generic, or harmful outcomes and the observable evidence that distinguishes
-a strong result. Experts know when they have gone wrong — record those signals here.
-
-## Relationships without merger
-
-Link adjacent capability dossiers and explain the tension or handoff. Do not absorb their expertise here.
+- **Quality bar (90 vs 60):** <the observable dividing line between strong and average work>
+- **Tradeoffs & flip conditions:** <when X conflicts with Y, choose X here; flip to Y only if ...>
+- **Anti-patterns (do not do):** <3–5 concrete mistakes to forbid>
+- **Verification probes:** <how to test or inspect that the result actually meets specialist standards>
+- **Design delta (Before -> After):** <what concrete Design decision changed because of this research and reflection>
 `;
 
-export const RESEARCH_GUIDE = `# Research guide for this capability
+export const RESEARCH_GUIDE = `# Legacy research guide
 
-> This file guides what to write in the research/ directory. Delete it when you have added your own
-> research materials. \`loom capability synthesize\` reads all .md files in this directory (except this
-> guide) and expects them to contain expert narratives, case studies, or methodology sources that
-> inform the decision tree.
-
-## What to write
-
-Create one .md file per research source. Each file should answer: **how does an expert in this field
-think through the problems this project faces?**
-
-Good research materials include:
-- Expert narratives: how a practitioner describes their own decision process
-- Case studies: real projects where this field's decisions mattered, and what happened
-- Methodology sources: established frameworks, heuristics, or principles from the field
-- Failure accounts: what went wrong when the field's judgment was absent or ignored
-
-Bad research materials (will produce weak decision trees):
-- Generic textbook summaries with no project-specific relevance
-- Tool documentation or API references (those are not professional judgment)
-- Marketing copy or opinion pieces without evidence
-
-## File format
-
-Name files descriptively: \`expert-decision-process.md\`, \`case-study-X.md\`, \`failure-account-Y.md\`.
-Each file should be 1-3 paragraphs of substantive content. Include the source at the top:
-
-\`\`\`markdown
-# <descriptive title>
-
-Source: <book, article, interview, observation, or personal experience>
-
-<content: how the expert thinks, what they decided, what evidence they used, what happened>
-\`\`\`
-
-## How this feeds synthesize
-
-\`loom capability synthesize\` checks that:
-1. At least one .md file exists in research/ (besides this guide)
-2. Every decision tree node (### C1, C2, ...) in capability.md has a \`source:\` field
-3. Every node has a \`counterexample:\` field
-
-The source field in each node should reference which research file supports it. Write research that
-you can cite by name when you build the decision tree.
+Skeinn 2.4+ uses single-file capabilities (\`.skeinn/capabilities/<slug>.md\`) with inline verifiable
+sources under \`## How real practitioners operate\`. This guide is retained only for legacy
+directory-style dossiers.
 `;
 
-export function evalConditionPrompt({ brief, loom, humanChannel = 'available' }) {
+export function evalConditionPrompt({ brief, skeinn, humanChannel = 'available' }) {
   const environment = environmentProtocol({ humanChannel }).replace('## Environment availability\n\n', '');
-  return loom
-    ? `# Evaluation condition\n\n${brief}\n\n${environment}\n\nWork with all ordinary Agent capabilities and tools. Use LOOM as invisible continuity infrastructure: run \`loom context --human-channel ${humanChannel}\`, maintain its disk state, and never ask the human to operate it. This condition has no extra authority or information.`
-    : `# Evaluation condition\n\n${brief}\n\n${environment}\n\nWork as a normal capable Agent with all ordinary capabilities and tools. LOOM and its files are unavailable in this condition. Use any normal planning or documentation you judge useful.`;
+  return skeinn
+    ? `# Evaluation condition\n\n${brief}\n\n${environment}\n\nWork with all ordinary Agent capabilities and tools. Use Skeinn as invisible continuity infrastructure: run \`skeinn context --human-channel ${humanChannel}\`, maintain its disk state, and never ask the human to operate it. This condition has no extra authority or information.`
+    : `# Evaluation condition\n\n${brief}\n\n${environment}\n\nWork as a normal capable Agent with all ordinary capabilities and tools. Skeinn and its files are unavailable in this condition. Use any normal planning or documentation you judge useful.`;
+}
+
+export function evalRelayBatonPrompt({ brief, pivot, batonNumber, skeinn, humanChannel = 'available' }) {
+  const environment = environmentProtocol({ humanChannel }).replace('## Environment availability\n\n', '');
+  const infra = skeinn
+    ? `Use Skeinn silently as continuity infrastructure: run \`skeinn context --full --human-channel ${humanChannel}\` on entry (with the assigned \`--state-dir\` if sidecar mode is used), keep \`.skeinn/\` current, and never ask the human to operate it.`
+    : 'Skeinn and its files are unavailable in this condition. Use any normal planning, notes, or verification you judge useful.';
+  if (batonNumber === 1) {
+    return `# Relay Baton 1 — Shaping & First Vertical Slice\n\n${brief}\n\n${environment}\n\n${infra}\n\nGoal: shape the core design and deliver the first working vertical slice with reproducible tests. Leave the workspace clean and resumable for a fresh Agent with zero chat history.`;
+  }
+  if (batonNumber === 2) {
+    return `# Relay Baton 2 — Zero-Memory Handoff & Mid-Flight Pivot\n\nYou are a FRESH Agent with ZERO prior conversation history. Recover the project solely from disk.\n\n## Mid-flight requirement change\n\n${pivot || 'The user changed a consequential design constraint after Milestone 1; update architecture, implementation, and tests without silently breaking earlier invariants.'}\n\n${environment}\n\n${infra}\n\nGoal: absorb the pivot cleanly, preserve valid earlier work, implement Milestone 2, and prove no regression.`;
+  }
+  return `# Relay Baton 3 — Cold Handoff, Hardening & Final Proof\n\nYou are a FRESH Agent with ZERO prior conversation history. Recover the project solely from disk.\n\n${environment}\n\n${infra}\n\nGoal: finish remaining edge cases, verify all core behaviors and failure modes end-to-end, and leave honest completion evidence (never claim green for unverified checks).`;
+}
+
+export function evalProbeChecklist({ id, title }) {
+  return `# L1 Micro-Probe Checklist — ${id}: ${title}
+
+Run both arms (Baseline vs Skeinn) through shaping + handoff only (no full build; ~¥2–5 per run).
+Score strictly Pass / Fail on each hard observable check:
+
+1. **Proactive Capability Choice**: Without extra nagging, did the Skeinn Agent create 1–3 high-leverage capability files (or a credible exemption)? [PASS / FAIL]
+2. **Zero Fake Research**: Zero \`agent-authored\` / self-cited research files; every \`external_researched\` claim cites a real external source (or honestly declares \`offline_reflection\`). [PASS / FAIL]
+3. **Real Design Collision**: Core Design docs compare >=2 genuinely viable alternatives (no strawman Option B) and record a concrete Before -> After Design delta. [PASS / FAIL]
+4. **Low CLI Friction**: Total Skeinn CLI validation retries <= 1 during shaping. [PASS / FAIL]
+5. **Cold-Start First Action**: A fresh Agent reading only disk names the exact first file to edit and exact verification command without guessing. [PASS / FAIL]
+`;
 }
 
 export function evalJudgePrompt() {
-  return `# Blind Evil Eval judge
+  return `# Blind Evil Eval Judge (Pairwise Forced-Choice)
 
-You receive two anonymized runs in randomized order. Do not infer framework identity. Judge observable
-work, not framework-shaped filenames or document volume. Cite evidence for every score. Compare intent
-fidelity, question value, whole-project coverage, professional capability depth, buildability, continuity
-after forced resets, implementation evidence, user burden, and cost/time. Penalize unnecessary ceremony,
-questions that do not change decisions, and documentation that a fresh Agent cannot use. Swap order and
-judge again; mark order-sensitive conclusions unstable. Attribute missing files or path failures to a run
-only after the anonymized packet passed its relative-layout and declared-test preflight. A system wins only if its benefit survives equal
-model, tools, workspace, user facts, reset points, and budget.`;
+You receive two anonymized runs (X and Y) in randomized order, along with their Hidden Oracle test
+results and real telemetry (tokens, cost_cny, wall_seconds, tool_calls, cli_retries). Do not infer
+framework identity. Judge observable work, not framework-shaped filenames or document volume.
+
+## Scoring rule: Forced-Choice Pairwise (no 1–5 score inflation)
+
+For each dimension, output ONLY one verdict — \`X_CLEAR_WIN\`, \`TIE\`, or \`Y_CLEAR_WIN\` — plus concrete
+file/command evidence justifying why the winner is meaningfully better:
+
+1. **Intent fidelity & pivot survival** — Did the final build satisfy both the original brief and the mid-flight pivot without breaking earlier invariants?
+2. **Specialist capability & craft depth** — Did domain judgment produce visibly stronger, non-generic choices (or did it collapse into safe AI defaults)?
+3. **Cold-handoff continuity** — Across forced resets / relay batons, which arm preserved truth cleanly without drift or rework?
+4. **Hidden-oracle & proof credibility** — Compare objective Hidden Oracle pass rates and whether each arm reported blind spots honestly instead of claiming false green.
+5. **User burden & ceremony** — Penalize unnecessary ceremony, unnecessary questions, bloated docs, or friction pushed onto the human.
+6. **Net value per RMB (cost_cny & latency)** — Given real telemetry, was any quality lead worth the added tokens, wall time, and retries?
+
+## Order-swap requirement
+
+Swap order (judge X->Y, then Y->X) and mark any verdict that flips as \`UNSTABLE\`. Attribute missing
+files or path failures to a run only after the anonymized packet passed its relative-layout and
+declared-test preflight. A system wins only if its benefit survives equal model, tools, workspace,
+user facts, reset points, and budget.`;
 }
 
 export function promptCatalog() {
@@ -744,7 +758,7 @@ export function promptCatalog() {
     },
   };
   return {
-    purpose: 'Complete inventory of LOOM cognitive messages. Validation errors and JSON status payloads enforce state but are not Agent prompts.',
+    purpose: 'Complete inventory of Skeinn cognitive messages. Validation errors and JSON status payloads enforce state but are not Agent prompts.',
     layers: {
       stable_core: AGENT_CORE,
       environment_adaptation_available: environmentProtocol({ humanChannel: 'available' }),
@@ -752,11 +766,11 @@ export function promptCatalog() {
       runtime_protocol: RUNTIME_PROTOCOL,
       execution_protocol: EXECUTION_PROTOCOL,
       project_state: shapingContext({ state: placeholderState, taskSummary: { total: 0, done: 0, open: 0, blocked: 0, active: null }, capabilityNames: [], designNames: [] }),
-      project_state_after_keeper_failure: shapingContext({ state: revisionState, taskSummary: { total: 1, done: 0, open: 1, blocked: 0, active: null }, capabilityNames: ['<field>'], designNames: ['<system>.md'] }),
-      keeper_review_of_prior_failure: shapingContext({ state: revisionState, taskSummary: { total: 1, done: 0, open: 1, blocked: 0, active: null }, capabilityNames: ['<field>'], designNames: ['<system>.md'], forKeeper: true }),
-      current_task: '## Active Task\n\n<exact Task JSON including acceptance, implements, capability_hooks, and covers if present>\n\n---\n\n## Task context: <path from Task.reads>\n\n<exact file content>\n\n(repeated for every read path)\n\n---\n\n## Capability decision points\n\n<extracted decision-tree nodes referenced by capability_hooks, with options, criteria, sources, and counterexamples>',
-      on_demand_map: '## On-demand project context\n\n- Decision history: .loom/DECISIONS.md (read when correction or lineage matters; records what changed and why)\n- Design: .loom/design/<document>.md\n- Professional capability: .loom/capabilities/<field>/capability.md\n- Project structure: .loom/STRUCTURE.md (read before creating or moving files)',
-      keeper_context: '## Decision history (...)\n\n<exact DECISIONS.md>\n\n---\n\n## Work map summary\n\n<summary and first executable Task>\n\n---\n\n## Design document: <name>\n\n<exact content>\n\n---\n\n## Capability dossier: <name>\n\n<exact content>',
+      project_state_after_keeper_failure: shapingContext({ state: revisionState, taskSummary: { total: 1, done: 0, open: 1, blocked: 0, active: null }, capabilityNames: ['<field> (external_researched)'], designNames: ['<system>.md'] }),
+      keeper_review_of_prior_failure: shapingContext({ state: revisionState, taskSummary: { total: 1, done: 0, open: 1, blocked: 0, active: null }, capabilityNames: ['<field> (external_researched)'], designNames: ['<system>.md'], forKeeper: true }),
+      current_task: '## Active Task\n\n<exact Task JSON including acceptance, implements, guardrails, and covers if present>\n\n---\n\n## Task guardrails\n\n<specialist red lines carried directly on the active Task>\n\n---\n\n## Task context: <path from Task.reads>\n\n<exact file content>\n\n(repeated for every read path)',
+      on_demand_map: '## On-demand project context\n\n- Decision history: .skeinn/DECISIONS.md (read when correction or lineage matters; records what changed and why)\n- Design: .skeinn/design/<document>.md\n- Professional capability: .skeinn/capabilities/<field>.md\n- Project structure: .skeinn/STRUCTURE.md (read before creating or moving files)',
+      keeper_context: '## Decision history (...)\n\n<exact DECISIONS.md>\n\n---\n\n## Work map summary\n\n<summary and first executable Task>\n\n---\n\n## Design document: <name>\n\n<exact content>\n\n---\n\n## Capability file: <name>\n\n<exact content>',
     },
     workspace_anchor: AGENT_ANCHOR,
     templates: {
@@ -768,16 +782,16 @@ export function promptCatalog() {
     },
     keeper: keeperProtocol({ attemptNumber: '<attempt-number>', preparedDigest: '<prepared-digest>' }),
     evaluation: {
-      baseline_condition: evalConditionPrompt({ brief: '<identical-raw-brief>', loom: false }),
-      loom_condition: evalConditionPrompt({ brief: '<identical-raw-brief>', loom: true }),
-      unattended_baseline_condition: evalConditionPrompt({ brief: '<identical-raw-brief>', loom: false, humanChannel: 'unavailable' }),
-      unattended_loom_condition: evalConditionPrompt({ brief: '<identical-raw-brief>', loom: true, humanChannel: 'unavailable' }),
+      baseline_condition: evalConditionPrompt({ brief: '<identical-raw-brief>', skeinn: false }),
+      skeinn_condition: evalConditionPrompt({ brief: '<identical-raw-brief>', skeinn: true }),
+      unattended_baseline_condition: evalConditionPrompt({ brief: '<identical-raw-brief>', skeinn: false, humanChannel: 'unavailable' }),
+      unattended_skeinn_condition: evalConditionPrompt({ brief: '<identical-raw-brief>', skeinn: true, humanChannel: 'unavailable' }),
       blind_judge: evalJudgePrompt(),
     },
     composition: {
       normal_resume: ['stable_core', 'environment_adaptation', 'runtime_protocol', 'project_state', 'PROJECT.md', 'on-demand document and capability map'],
-      active_task: ['normal_resume', 'execution_protocol', 'active Task JSON', 'exact files in Task.reads'],
-      keeper_handoff: ['keeper', 'normal_resume', 'DECISIONS.md', 'Work Map summary and first executable Task', 'all design documents', 'all professional capability dossiers'],
+      active_task: ['normal_resume', 'execution_protocol', 'active Task JSON', 'Task guardrails', 'exact files in Task.reads'],
+      keeper_handoff: ['keeper', 'normal_resume', 'DECISIONS.md', 'Work Map summary and first executable Task', 'all design documents', 'all capability files'],
     },
   };
 }

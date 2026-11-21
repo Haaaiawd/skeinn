@@ -1,254 +1,165 @@
-<p align="center"><strong>English</strong> · <a href="README.zh-CN.md">简体中文</a></p>
+<div align="center">
 
-<p align="center">
-  <img src="docs/brand/loom-readme-header.svg" alt="LOOM — Keep the whole. Continue the work." width="100%">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/brand/skeinn-wordmark-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/brand/skeinn-wordmark-light.svg">
+  <img alt="Skeinn" src="docs/brand/skeinn-wordmark-light.svg" height="64">
+</picture>
+
+<p><strong>Remember the whole. Build like a practitioner.</strong></p>
+<p>Invisible continuity, firsthand practitioner judgment, and proof infrastructure for AI coding agents.</p>
+
+<p>
+  <strong>English</strong> · <a href="README.zh-CN.md">简体中文</a> ·
+  <a href="design.md">System Design</a> ·
+  <a href="EVIL_EVAL.md">Evil Eval</a> ·
+  <a href="CHANGELOG.md">Changelog</a>
 </p>
 
-<p align="center">
-  <a href="https://www.npmjs.com/package/@haaaiawd/loom"><img src="https://img.shields.io/npm/v/%40haaaiawd%2Floom?style=flat-square&amp;color=4169E1&amp;label=npm" alt="npm version"></a>
-  <img src="https://img.shields.io/badge/node-%E2%89%A518-17212B?style=flat-square" alt="Node.js 18 or newer">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-9AD8C2?style=flat-square&amp;labelColor=17212B" alt="MIT license"></a>
+<p>
+  <img src="https://img.shields.io/badge/node-%E2%89%A518-17212B?style=flat-square" alt="Node.js 18+">
+  <img src="https://img.shields.io/badge/for-AI%20Coding%20Agents-3B63F6?style=flat-square" alt="For AI Coding Agents">
+  <img src="https://img.shields.io/badge/languages-Multilingual-17212B?style=flat-square" alt="Multilingual">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-9AD8C2?style=flat-square&amp;labelColor=17212B" alt="MIT License"></a>
 </p>
 
-<p align="center"><strong>The human talks to the Agent. LOOM helps the Agent remember, understand, and continue.</strong></p>
+</div>
 
-LOOM is spec-driven continuity, proof, and project understanding infrastructure for AI coding agents.
-It supports any work that can be materially advanced through code or command-line tools: software,
-operations, research workflows, office automation, data work, and highly personalized projects.
+---
 
-The human does not learn a framework or operate a CLI. They describe what they want, answer useful
-questions, disagree, delegate decisions, and watch the work become real. The Agent uses LOOM in the
-background to preserve the whole project across context compression, new sessions, and implementation.
+## Why Skeinn?
 
-<table>
-  <tr>
-    <td width="33%"><strong>Whole over fragments</strong><br>Keep the result, decisions, systems, and unknowns connected.</td>
-    <td width="33%"><strong>Expertise over costumes</strong><br>Compile project-specific professional judgment, not decorative expert personas.</td>
-    <td width="33%"><strong>Proof over ceremony</strong><br>Use independent handoff, exact done conditions, and disk evidence.</td>
-  </tr>
-</table>
+AI coding feels effortless on small scripts, yet multi-day, multi-module projects under unstructured Vibe Coding reliably hit four walls:
 
-## The loop
+| Failure mode | Unstructured Vibe Coding | Agent backed by Skeinn |
+| :--- | :--- | :--- |
+| **Context amnesia** | Compaction or a new session wipes out architecture, boundaries, and earlier corrections | Project truth, decisions, progress, and proof live on disk; a fresh Agent resumes directly |
+| **Generic average output** | Models default to safe statistical averages that look templated and amateur | Targets 1–3 bottleneck domains, **researches how real practitioners operate**, and reflects on project constraints |
+| **First-draft lock-in** | Codes the first plausible idea immediately, hiding expensive rework | Core designs force **at least 2 genuinely viable alternatives** (including a simpler or unconventional angle) |
+| **False-green completion** | Claims "done" while missing files, skipping edge cases, or breaking upstream work | A **fresh independent Keeper** audits build-readiness once; every Task closes with reproducible evidence |
 
-![The LOOM production loop](docs/loom-production-loop.svg)
+> **Core rule: Skeinn is for the Agent, not the human.**  
+> Multilingual by default — talk naturally in English, Chinese, Japanese, or any language you prefer. The Agent operates the `skeinn` CLI silently in the background.
 
-LOOM has three explicit feedback loops: understanding converges on the whole project; a fresh Keeper
-tests the frozen handoff and returns concrete gaps; restartable Tasks carry implementation and evidence
-across interruptions. A failed Keeper does not become a warning that everyone politely ignores—it sends
-the project back to the exact source that needs repair, then requires a changed digest and a new Keeper.
+---
 
-The loop is adaptive. LOOM does not provide a universal questionnaire, fixed professional roles, or
-a mandatory phase ritual. The Agent keeps clarifying while unknowns could materially change the whole.
-It proceeds when the remaining uncertainty is reversible and local, or when the human explicitly asks
-to skip after hearing the concrete cost.
-
-## Project truth on disk
-
-An initialized project contains one small semantic backbone:
+## How a real project flows
 
 ```text
-.loom/
-├── PROJECT.md          concise entry point and map of the current whole
-├── DECISIONS.md        concise history when important decisions supersede earlier ones
-├── design/             product, experience, system, contract, verification, operations, or research docs
-├── capabilities/       one project-specific dossier per recognizable professional field
-├── state.json          confirmed facts, assumptions, unresolved questions, Keeper status
-├── tasks.json          broad Work Map plus the detailed active horizon
-└── eval/               optional Evil Eval scenarios for testing LOOM itself
+You (natural chat in any language)          Agent (silent skeinn CLI on disk)
+─────────────────────────────────────────────────────────────────────────
+1. Share an early idea                      Inspect workspace → ask one dense
+   "Build an offline reflection tool..."    batch of consequential questions
+
+2. Settle key tradeoffs                     Anchor PROJECT.md → iterate core
+                                            Design docs & 1–3 bottleneck
+                                            Capabilities (practitioner research
+                                            → reflection → Design delta)
+
+3. Confirm the whole                        Freeze digest → fresh zero-memory
+                                            Keeper audits startability, fake
+                                            research, strawmen, and guardrails
+
+4. See working slices, steer anytime        Execute one restartable Task at a
+                                            time with guardrails & exact proof;
+                                            direction shifts flag stale work
 ```
 
-Small projects may need few design documents; large projects may need many. A consequential subsystem,
-experience, interface, contract, or operational concern gets its own document when a fresh Agent must
-understand or verify it independently. `PROJECT.md` maps the whole instead of becoming a thousand-line attic.
+---
 
-### Capability dossiers
+## What real Skeinn artifacts look like
 
-A dossier exists only when specialist knowledge would change a question, design choice,
-implementation, risk, or verification method. Each dossier represents one recognizable professional
-field—such as UI/UX design, visual art direction, game design, psychology, security, or distributed
-systems. Different fields remain separate even when tightly coupled; their synthesis belongs in the
-design document whose decision they jointly shape. A task technique such as triage, ranking, parsing,
-or caching is not allowed to masquerade as the project's entire capability surface.
+Example: building a **3-minute offline post-meeting reflection tool**.
 
-Capability scenario authority remains visible: `--source human` confirms a user-selected scenario;
-`--source agent` records a provisional selection when the human is unavailable.
+### 1. Bottleneck capability (`.skeinn/capabilities/reflective-ux.md`)
 
-### Work Map and Task
+```markdown
+# Reflective UX Design
+- Mode: external_researched
+- Authority: human_confirmed
 
-The Work Map may be hundreds or thousands of lines. It is stored, searched, and revised on disk; it
-is not injected into every model context. Planning begins broadly, while detailed steps are compiled
-only for the active horizon.
+## How real practitioners operate
+- Progressive disclosure with low-cognitive-load single-column flows — Source: https://linear.app/method
+- Local-first tools surface storage boundaries and instant deletion upfront — Source: https://localfirstweb.dev/
 
-A Task is not a miniature bureaucracy. It is the smallest restartable checkpoint that tells a fresh
-Agent:
+## Reflection for this project
+- What to refuse: streaks, mood scores, and timers create assessment anxiety right after a tense meeting.
+- Non-obvious craft move: mirror the user's own phrasing and let them pick one small next step instead of AI lecturing.
 
-- what observable result to create;
-- what proves completion;
-- what must not be damaged;
-- which project and capability documents matter;
-- which design decision and capability nodes apply, or why they do not;
-- what has happened, what is happening, and what comes next;
-- which evidence already exists and which exact done condition it proves.
-
-## Agent quick start
-
-Install the CLI:
-
-```bash
-npm install --global @haaaiawd/loom
-loom --version
+## Operational rules and Design delta
+- Anti-patterns: countdown timers, emotion ratings, silent network requests
+- Design delta (Before -> After): Replaced 3-pane dashboard with a skippable 4-step single-column flow + upfront clear control.
 ```
 
-Or install from the repository during development:
+### 2. Decision-collision design (`.skeinn/design/first-use-flow.md`)
 
-```bash
-npm install --global .
-loom --version
+```markdown
+## Alternatives considered
+- Option A (chosen): Single self-contained HTML file + localStorage (zero install, instant open, provably offline).
+- Option B (rejected): Vite + local SQLite server. More extensible, but breaks zero-friction 3-minute use.
+
+## How this could look done yet fail
+- Tests pass, yet a remote Google Font leaks network traffic or page reload silently drops an in-progress draft.
 ```
 
-Inside a project, the Agent runs:
-
-```bash
-loom init
-loom context
-```
-
-When a Task is active, `loom context` also restores a compact execution protocol: reconcile the Task with
-the current workspace and version-control state, inspect relevant tests before editing, choose proof by risk
-and exact `acceptance` criteria, persist `completed/current/next` at meaningful handoffs, show the human real
-working things at milestones, and close only with reproducible evidence. It does not impose a ceremonial test
-or pull request on work that does not need one.
-
-### Unattended and benchmark runs
-
-LOOM does not invent a user when none is reachable. Tell the context compiler that the human channel is
-unavailable; the Agent then resolves uncertainty in order: inspect the workspace and tools, research only
-objective facts when the task permits it, then record a bounded assumption and choose a reversible action or
-block on unavailable authority. Web research never substitutes for user intent, preference, or permission.
-
-```bash
-loom context --human-channel unavailable
-```
-
-Benchmark runners can keep LOOM state out of the scored workspace by using an external sidecar on **every**
-LOOM command. Virtual references such as `.loom/PROJECT.md` still work inside Task context, but `init` does not
-write `.loom/` or `AGENTS.md` into the workspace being scored.
-
-```bash
-loom init --state-dir /runner/run-001/loom-state
-loom context --state-dir /runner/run-001/loom-state --human-channel unavailable
-```
-
-The Agent edits `.loom/PROJECT.md`, design documents, and capability dossiers as human-readable project truth. Structured
-writes use JSON files so long content remains auditable and shell quoting does not corrupt it:
-
-```bash
-loom record --json-file understanding-update.json
-loom capability add ui-ux-design --title "UI/UX design"
-loom capability add behavioral-psychology --title "Behavioral psychology"
-loom capability confirm behavioral-psychology --scenario "<project-specific expert situation>" --source human
-loom design add product --title "Product definition" --kind product
-loom design add local-analysis --title "Local analysis system" --kind system
-loom design add acceptance --title "Vertical-slice verification" --kind verification
-loom task plan --json-file initial-work-map.json
-loom project ready
-```
-
-At the transition to material execution, open a fresh Agent thread and give it one short instruction:
-
-```text
-Run loom keeper prompt in this project and follow it. Decide whether you can responsibly start.
-```
-
-Keeper pass JSON records `review.mode: "independent"`, a reviewer identity, and concrete isolation evidence.
-Known self-review cannot pass; if the host cannot isolate a fresh Agent, use `loom keeper skip` with the
-reason so reduced confidence stays visible.
-
-If Keeper returns `needs_revision` or `blocked`, those exact gaps reappear in `loom context`. The Agent
-repairs the relevant project, design, capability, or Task source, prepares a changed digest, and opens a
-different fresh Keeper. If the host cannot create a subagent, the human can open a new window and use the
-same sentence. After the one-time handoff passes, the execution Agent starts and maintains Tasks normally:
-
-```bash
-loom task next
-loom task start TASK-001
-loom context
-loom task update TASK-001 --json-file progress.json
-loom task block TASK-001 --json-file block.json
-loom task reopen TASK-001 --reason "How the recovery conditions were met, or why the completion was disproven"
-loom task done TASK-001 --json-file evidence.json
-```
-
-Completion is deliberately explicit:
+### 3. Restartable Task with guardrails (`.skeinn/tasks.json`)
 
 ```json
 {
-  "evidence": ["npm test: 28 passed, 0 failed"],
-  "acceptance_results": [
+  "id": "TASK-001",
+  "title": "Build offline reflection flow and instant local wipe",
+  "implements": ".skeinn/design/first-use-flow.md#Alternatives considered",
+  "guardrails": [
+    "Zero external network requests, remote fonts, or analytics scripts",
+    "No emotion scoring, timers, or mandatory completion locks"
+  ],
+  "acceptance": [
     {
-      "criterion": "The exact acceptance criterion from the Task.",
-      "evidence": "The command, artifact, or observation that proves this criterion."
+      "criterion": "Static scan finds zero external URLs; reload restores draft; clear wipes storage",
+      "verify_by": "Run node tests/verify.mjs and verify reload/clear in browser",
+      "evidence": "verify.mjs: 0 external URLs; reload restored draft; clear wiped localStorage"
     }
   ]
 }
 ```
 
-When the human changes direction or requests a redesign mid-project, the Agent opens a
-clarification round instead of silently reinterpreting: `loom clarify start --reason` pauses
-material work, one batch of material questions is asked in conversation, `loom clarify resolve`
-records the answers, and `loom clarify close` refuses until every round question is resolved or
-deliberately skipped. The answers then cascade into `loom decision`, design documents, and Tasks.
+---
 
-Run `loom --help` for the complete command surface. Structured-write commands expose canonical payloads
-through command-specific help such as `loom record --help` and `loom task done --help`. Conceptual
-guidance — why each shaping artifact exists, its lifecycle, and its quality bar — is available through
-`loom help <concept>` (`shaping`, `design`, `capability`, `task`, `deliverable`); shaping command
-outputs also carry a `next` hint, and `loom context` names the unfinished shaping frontier. Run `loom check`
-for structural health. Run
-`loom prompts` to print every cognitive message LOOM can inject: the stable collaboration core,
-runtime protocol, dynamic state layer, all document templates, Keeper prompt, eval conditions, judge
-prompt, and their composition order. See the [prompt and message catalog](docs/PROMPT_CATALOG.md).
-
-## What LOOM deliberately removed
-
-LOOM 2 replaces the v1 chain of Doctrine, Vision, Capability Graph, Impact Gate, Intent Map, Expertise
-Pack, Atelier, Quality Arena, per-Intent Keeper, and Atlas with one adaptive understanding loop, a
-scalable graph of design documents, separate professional-field dossiers, one Work Map, and one
-restartable Task contract.
-
-The valuable ideas remain: project judgment, external professional capability, authored choices,
-observable completion, context isolation, and evidence. They no longer require separate roles and gates.
-
-## Proving that LOOM helps
-
-`loom eval scaffold --json-file scenario.json` creates an Evil Eval scenario with equal model, tools,
-workspace, user-channel availability, facts, and budget across two conditions. The only intended difference is the availability
-of LOOM. Runs are repeated, context is forcibly reset, outputs are blinded and order-swapped, and ceremony,
-user burden, time, and token cost are penalized alongside quality. See [EVIL_EVAL.md](EVIL_EVAL.md).
-
-![The LOOM Evil Eval](docs/loom-eval-loop.svg)
-
-## Development
+## Quick start
 
 ```bash
-npm test
+npm install --global @haaaiawd/skeinn
 ```
 
-The v2 test suite exercises the complete loop, including a 250-Task Work Map, context selection,
-superseding decisions, scalable design documents, professional-field separation, capability compilation with
-source-citation validation, multi-attempt Keeper revision with explicit closure evidence, stale digest and duplicate-run
-rejection, exact-file Task start, block/reopen including disproven completion, per-acceptance-criterion evidence,
-deliverable coverage, decision recording with affected-task warnings, and Evil Eval controls. See the
-[complete UX and loop specification](docs/UX_FLOW.md).
+Open your coding Agent (Claude Code, Cursor, Windsurf, Codex, etc.) in your project directory and say:
 
-## Documentation
+> "This project uses Skeinn for continuity and design quality. Run `skeinn init` and `skeinn context --full` to load the protocol; talk to me naturally and maintain state silently in the background."
 
-| Read this | When you need |
-| --- | --- |
-| [System design](design.md) | The architecture, storage model, invariants, and command contracts |
-| [UX and loop specification](docs/UX_FLOW.md) | Every human, Agent, LOOM, Keeper, and Task transition |
-| [Prompt and message catalog](docs/PROMPT_CATALOG.md) | Every message LOOM injects and how the layers compose |
-| [Evil Eval protocol](EVIL_EVAL.md) | A controlled framework-vs-no-framework comparison |
-| [Changelog](CHANGELOG.md) | What changed in LOOM 2 |
+<details>
+<summary><strong>Agent CLI quick reference (for Agents, not humans)</strong></summary>
 
-Editable Draw.io sources live beside both flow diagrams in [`docs/`](docs/).
+```bash
+skeinn init
+skeinn context --full                         # first entry or after context reset
+skeinn context                                # lean resume between Tasks
+skeinn record --json-file understanding.json
+skeinn design add core --title "Core system" --kind system
+skeinn capability add ui-ux --title "UI/UX design" --mode external_researched
+skeinn capability confirm ui-ux --scenario "<project scenario>" --source human
+skeinn capability exempt --reason "<why standard engineering suffices>"
+skeinn deliverable add cli-core --title "CLI core" --kind module
+skeinn task plan --json-file work-map.json
+skeinn project ready
+skeinn keeper record --json-file keeper-result.json
+skeinn task next && skeinn task start TASK-001
+skeinn task done TASK-001 --json-file evidence.json
+skeinn check
+```
+
+</details>
+
+---
+
+## Verify it actually helps
+
+Run `npm test` (31 end-to-end contract tests), or use `skeinn eval scaffold` to run controlled **Evil Eval** comparisons (equal model, tools, workspace, user facts, forced resets, and blind order-swapped judging). See [EVIL_EVAL.md](EVIL_EVAL.md).

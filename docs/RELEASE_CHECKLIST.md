@@ -1,13 +1,13 @@
-# LOOM release checklist
+# Skeinn release checklist
 
 This checklist stops a documentation-complete release from becoming a runtime-incomplete release.
 
 ## 1. Confirm the release surface
 
 ```bash
-node cli/bin/loom.js --version
-node cli/bin/loom.js --help
-node cli/bin/loom.js prompts
+node cli/bin/skeinn.js --version
+node cli/bin/skeinn.js --help
+node cli/bin/skeinn.js prompts
 npm test
 npm pack --dry-run
 ```
@@ -20,12 +20,12 @@ workspaces, eval artifacts, temporary browser profiles, or local project state.
 
 ```bash
 npm whoami
-npm view @haaaiawd/loom version
+npm view @haaaiawd/skeinn version
 git status --short
 git diff --check
 ```
 
-The version in `package.json`, `CHANGELOG.md`, and `loom --version` must agree. The new version must not
+The version in `package.json`, `CHANGELOG.md`, and `skeinn --version` must agree. The new version must not
 already exist in the registry.
 
 ## 3. Publish deliberately
@@ -45,8 +45,8 @@ npm identity. Tags and published npm versions are externally visible and should 
 In a clean temporary directory:
 
 ```bash
-npm view @haaaiawd/loom version
-npx @haaaiawd/loom@2.0.1 --version
+npm view @haaaiawd/skeinn version
+npx @haaaiawd/skeinn@2.0.1 --version
 ```
 
 Then open the GitHub README and npm package page to confirm the SVG header, diagrams, links, and changelog

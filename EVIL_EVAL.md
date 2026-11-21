@@ -1,125 +1,84 @@
-# Evil Eval
+# Evil Eval v2 — 三层高性价比评测体系
 
-Evil Eval asks a hostile question: does LOOM improve real Agent work, or does it merely generate more process
-that resembles rigor?
+Evil Eval 只回答一个冷酷的问题：**Skeinn 到底有没有在真实项目里显著提升 Agent 的交付质量，还是只是多写了一堆看起来很严谨的文档？**
 
-## Core comparison
+为了既保证科学对照、又能以 **单次 ~¥20 人民币（适配 DeepSeek 4.1 Flash 等高性价比快模型）** 的成本高频跑起来，Evil Eval 按成本和用途拆成三层：
 
-Each scenario runs two conditions:
+| 层级 | 命令模式 | 单次参考预算 | 适用时机 | 判定机制 |
+| :--- | :--- | :--- | :--- | :--- |
+| **L1：微探针（Micro-Probe）** | `mode: "probe"` | **¥2–¥5** | 每次改 `protocol.js` / `store.js` 后 | 5 项硬断言 Pass/Fail（防偷懒、禁伪调研、设计对撞、CLI 零摩擦、冷启动首步） |
+| **L2：三棒盲接力赛（Relay Eval，主力推荐）** | `mode: "relay"` | **¥15–¥20** | 每个小版本 / 核心改动验收 | **3 棒零记忆接力 + 中途需求反转 + 隐藏自动化断言（Hidden Oracle）+ 三选一盲评 + 真实遥测** |
+| **L3：完整发布评测（Full Eval）** | `mode: "full"` | **¥50–¥60** | 大版本发布前 / 消融实验 | 3 次重复 + 全量盲评 + 消融对照 |
 
-- Baseline: a normal capable Agent receives the raw brief and all ordinary tools, but no LOOM.
-- LOOM: the same model receives the same raw brief, workspace, tools, user answers, and budget, with LOOM available.
+---
 
-The baseline is not weakened. It may inspect files, browse, ask questions, plan, use memory supplied by the host,
-and create any artifacts it normally would. The intended experimental variable is LOOM's protocol and persistent
-state, not permission, information, or model quality.
+## 核心对照组（绝不削弱基线）
 
-This is the primary causal comparison: **no framework versus LOOM 2**. LOOM 1 may be added as a third regression
-condition when we want to know whether the redesign improved on its ancestor, but it cannot replace the no-framework
-baseline and does not answer whether LOOM itself adds value.
+每个场景同时跑两条臂（Arm）：
+- **Baseline**：同等模型、工具、工作区、用户回答与预算，**无 Skeinn**（允许其自由规划、写文档、用自身记忆）。
+- **Skeinn**：完全相同的模型与条件，仅允许后台静默使用 `skeinn` CLI。
 
-## Scenario shape
+---
 
-A scenario records:
+## 主力推荐：~¥20 人民币的 L2 三棒盲接力赛（`mode: "relay"`）
 
-- the identical raw brief;
-- workspace setup and immutable snapshot;
-- hidden user facts and a deterministic answer script;
-- human-channel availability (`available` or `unavailable`), identical across conditions;
-- success criteria that judges can observe;
-- context-reset points;
-- equal token, time, and tool budgets;
-- at least three repetitions per condition.
+单轮原型任务很难拉开裸 Agent 与框架的差距。Skeinn 真正的护城河在**跨多次失忆接棒、中途推翻决策与专业域避坑**。一轮完整 L2 Relay 恰好把预算花在刀刃上：
 
-High-signal scenarios include ambiguous greenfield work, changes to an existing project, multidisciplinary
-personalized products, operational command work, and a mid-project user correction that supersedes an earlier
-decision.
+1. **第 1 棒（塑形 + 纵向切片 1）**：两条臂分别拿到同一份原始需求，完成初步设计与第一个可运行切片。
+2. **第 2 棒（清空上下文 + 中途方向反转）**：强制开启**零聊天记忆的新 Agent**，只读磁盘恢复项目，并注入一条实质性的中途需求变更（`pivot`），要求不破坏第 1 棒已成立的不变量。
+3. **第 3 棒（清空上下文 + 边界加固与收口）**：再次开启**零记忆新 Agent**（可选降级为更轻模型测试交接韧性），补齐边界条件、运行验证并诚实报告盲点。
 
-## The evil parts
+### ¥20 预算怎么分配（以 Flash 级快模型为例）
+- **Baseline 3 棒**：约 ¥4–¥6
+- **Skeinn 3 棒（含 1–2 个瓶颈 Capability 与 1 次独立 Keeper）**：约 ¥8–¥10
+- **Hidden Oracle 自动化验收（`hidden-oracle.mjs`）**：**¥0**（纯本地 Node 脚本，客观零偏见）
+- **双顺序盲评裁判（X→Y 与 Y→X 各一次）**：约 ¥2–¥3
+- **合计**：稳定控制在 **¥15–¥20 / 次**，既不因省钱缩水到没参考意义，也不会重到跑不动。
 
-1. Force a context reset after clarification and again mid-Task.
-2. Include one attractive but wrong implementation assumption.
-3. Include a professional domain where generic advice is plausible but harmful.
-4. Change one consequential user answer after the first plan is formed.
-5. Give both conditions equal access to discoverable repository facts.
-6. Penalize unnecessary questions, ceremony, document volume, time, and token cost.
-7. Require an implementation attempt or operational transcript; documents alone cannot win.
+---
 
-## Unattended external benchmarks
+## 为什么废除 1–5 分制，改用“隐藏断言 + 三选一盲评 + 真实遥测”？
 
-An external benchmark such as a terminal-use suite may provide no human response channel. In that condition,
-set `human_channel` to `unavailable` for both arms. Neither arm may invent a user answer or treat web search as
-a substitute for user intent, preference, or authority. Both may inspect the workspace and use only the research
-tools the benchmark makes available; unresolved consequential choices require a bounded reversible assumption or
-a block.
+1. **隐藏断言脚本（`hidden-oracle.mjs`）**：Agent 施工期间完全不可见，收尾后直接跑客观检查（文件/契约存在性、零外链扫描、重启恢复、回归破损率），彻底消灭“嘴上说完成了”。
+2. **强制三选一盲评（Pairwise Forced-Choice）**：废除容易打出 4 vs 5 贴脸分的 1–5 分制。裁判对 6 个维度只输出 **`X_CLEAR_WIN` / `TIE` / `Y_CLEAR_WIN`**，并强制交换顺序（X→Y 与 Y→X）复评，凡是翻转的结论一律标 **`UNSTABLE`**。
+3. **真实遥测落盘（`telemetry-template.json`）**：强制记录每条臂的真实 `input_tokens`、`output_tokens`、`cost_cny`、`wall_seconds`、`tool_calls`、`cli_retries` 与 `hidden_oracle_passed`，直接计算**每元人民币换来的净质量提升**。
 
-Run LOOM with `--state-dir` pointing outside the scored workspace. The sidecar must be fresh per run and passed
-to every LOOM command, so `.loom/` state cannot alter task files or hidden-test behavior.
+---
 
-## Measures
+## 快速生成一个评测脚手架
 
-Every score cites observable evidence:
-
-| Measure | What it asks |
-|---|---|
-| Intent fidelity | Did the result solve the user's actual problem without unauthorized expansion? |
-| Question value | Did questions change decisions, and did the Agent avoid asking discoverable facts? |
-| Whole-project coverage | Were important behaviors, boundaries, dependencies, and failure paths understood? |
-| Capability depth | Did specialist knowledge produce a distinctive project decision rather than a summary? |
-| Buildability | Could a fresh Agent select and begin the right work without guessing? |
-| Reset continuity | What important truth survived forced context loss? |
-| User burden | How much unnecessary explanation, questioning, and framework operation reached the human? |
-| Cost and time | Was any quality gain worth its added tokens, latency, and artifacts? |
-
-## Blinding and repetition
-
-Runs are anonymized. A fresh judge receives A and B in randomized order without framework names. The judge scores
-both, then receives the order swapped and judges again. Order-sensitive conclusions are marked unstable. Each
-condition runs at least three times because a single model trajectory cannot distinguish a system effect from luck.
-
-Anonymization may replace condition labels and framework metadata, but it must preserve each runnable artifact's
-internal directory names and relative paths. Before the judge sees a packet, the harness records a source digest/file
-manifest and reruns the condition's declared tests and smoke commands from the anonymized location. A missing file or
-path failure introduced by copying is a harness failure, not a condition failure; repair the packet and rerun the judge
-while preserving the erroneous first judgment as audit evidence.
-
-Human judgment should be used for product taste or domain harm when an automated judge cannot observe it. An LLM
-judge may organize evidence but does not become ground truth by being verbose.
-
-## Ablations
-
-If full LOOM wins, run smaller comparisons to find the causal mechanism:
-
-- Task persistence only;
-- project whole plus Task persistence;
-- capability dossiers without the clarification protocol;
-- full LOOM without forced resets.
-
-LOOM should keep only mechanisms whose benefit survives ablation. If the same result comes from a smaller subset,
-delete the rest.
-
-## CLI scaffold
-
-Create a scenario description:
+准备 `scenario.json`：
 
 ```json
 {
-  "id": "EVAL-001",
-  "title": "Ambiguous multidisciplinary build",
-  "brief": "Build a calming recovery tool from this repository.",
-  "hidden_user_facts": ["The user must retain manual control."],
-  "human_channel": "available",
-  "success_criteria": ["A fresh Agent resumes correctly after a forced reset."],
-  "context_reset_points": ["after-shaping", "mid-task"],
-  "repetitions": 3
+  "id": "RELAY-001",
+  "title": "本地离线复盘工具三棒接力",
+  "mode": "relay",
+  "budget_cny": 20,
+  "brief": "做一个单文件本地离线的会议后 3 分钟复盘工具，刷新保留草稿，支持一键清空。",
+  "pivot": "第 2 棒中途新增：用户要求支持本地加密 JSON 导出与导入，但仍必须 100% 离线零外链。",
+  "hidden_checks": [
+    "静态扫描零外部 HTTP/CDN/字体请求",
+    "刷新后草稿完整恢复，一键清空后存储归零",
+    "加密导出再导入后数据无损且错误密码被诚实拒绝"
+  ],
+  "human_channel": "unavailable",
+  "success_criteria": ["三棒零记忆接力后全部隐藏断言通过且无回归破损"]
 }
 ```
 
-Then run:
+运行：
 
 ```bash
-loom eval scaffold --json-file scenario.json
+skeinn eval scaffold --json-file scenario.json
 ```
 
-LOOM writes a manifest, equalized condition prompts, and a blind judge prompt under `.loom/eval/<scenario>/`.
-Launching isolated Agents remains host-specific; do not claim the evaluation ran merely because the scaffold exists.
+Skeinn 会在 `.skeinn/eval/<scenario>/` 下自动生成：
+- `manifest.json`（控制变量与预算上限）
+- `batons/baseline-baton-{1,2,3}.md` 与 `batons/skeinn-baton-{1,2,3}.md`（可直接喂给各棒新会话的提示词）
+- `hidden-oracle.mjs`（填入你的客观断言脚本）
+- `telemetry-template.json`（成本与重试遥测模板）
+- `judge-prompt.md`（双顺序三选一盲评裁判提示词）
+- 若 `mode: "probe"`，额外生成 `probe-checklist.md`（5 项 L1 防偷懒硬检查清单）。
+
+> 无人值守运行 Skeinn 臂时，请配合 `--state-dir <工作区外目录>` 与 `--human-channel unavailable`，确保 `.skeinn/` 状态不污染被评测工作区。

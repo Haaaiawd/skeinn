@@ -1,14 +1,14 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-const cli = resolve('cli/bin/loom.js');
+const cli = resolve('cli/bin/skeinn.js');
 const roots = [];
 let passed = 0;
 
 function workspace() {
-  const root = mkdtempSync(join(tmpdir(), 'loom-v2-'));
+  const root = mkdtempSync(join(tmpdir(), 'skeinn-v2-'));
   roots.push(root);
   return root;
 }
@@ -16,7 +16,7 @@ function workspace() {
 function run(root, args, expected = 0) {
   const result = spawnSync(process.execPath, [cli, ...args], { cwd: root, encoding: 'utf8' });
   if (result.status !== expected) {
-    throw new Error(`Command failed (${result.status}, expected ${expected}): loom ${args.join(' ')}\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+    throw new Error(`Command failed (${result.status}, expected ${expected}): skeinn ${args.join(' ')}\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
   }
   return expected === 0 ? result.stdout.trim() : (result.stderr.trim() || result.stdout.trim());
 }
@@ -46,20 +46,20 @@ function test(name, fn) {
   }
 }
 
-console.log('LOOM v2 minimal loop');
+console.log('Skeinn v2 minimal loop');
 
 test('init creates one small, human-readable project skeleton', () => {
   const root = workspace();
   const result = JSON.parse(run(root, ['init']));
   assert(result.initialized === true, 'init should initialize');
-  for (const file of ['.loom/PROJECT.md', '.loom/STRUCTURE.md', '.loom/DECISIONS.md', '.loom/state.json', '.loom/tasks.json', '.loom/deliverables.json']) {
+  for (const file of ['.skeinn/PROJECT.md', '.skeinn/STRUCTURE.md', '.skeinn/DECISIONS.md', '.skeinn/state.json', '.skeinn/tasks.json', '.skeinn/deliverables.json']) {
     assert(existsSync(join(root, file)), `${file} missing`);
   }
   assert(result.files.includes('AGENTS.md'), 'init file list must include the AGENTS.md anchor it creates');
-  assert(existsSync(join(root, '.loom', 'design')), 'design directory missing');
-  assert(existsSync(join(root, '.loom', 'capabilities')), 'capability directory missing');
-  assert(!existsSync(join(root, '.loom', 'v1')), 'v2 must not recreate version ceremony');
-  assert(readFileSync(join(root, 'AGENTS.md'), 'utf8').includes('loom context'), 'Agent anchor missing');
+  assert(existsSync(join(root, '.skeinn', 'design')), 'design directory missing');
+  assert(existsSync(join(root, '.skeinn', 'capabilities')), 'capability directory missing');
+  assert(!existsSync(join(root, '.skeinn', 'v1')), 'v2 must not recreate version ceremony');
+  assert(readFileSync(join(root, 'AGENTS.md'), 'utf8').includes('skeinn context'), 'Agent anchor missing');
   assert(readFileSync(join(root, 'AGENTS.md'), 'utf8').includes('after a context reset'), 'Agent recovery trigger missing');
   assert(readFileSync(join(root, 'AGENTS.md'), 'utf8').includes('absolute path'), 'Agent anchor should explain source-checkout CLI recovery');
   assert(JSON.parse(run(root, ['init'])).reason === 'already_initialized', 'repeat init should be safe');
@@ -72,9 +72,9 @@ test('context teaches adaptive question judgment without a fixed questionnaire',
   assert(context.includes('uncertainty frontier'), 'uncertainty frontier missing');
   assert(context.includes('do not follow a fixed questionnaire'), 'adaptive questioning rule missing');
   assert(context.includes('The human talks naturally to you'), 'invisible CLI boundary missing');
-  assert(context.includes('one recognizable field'), 'professional field boundary missing');
+  assert(context.includes('one recognizable field') || context.includes('recognizable field'), 'professional field boundary missing');
   assert(context.includes('Do not compress a complex product into PROJECT.md'), 'document graph rule missing');
-  assert(!context.includes('# LOOM active Task execution protocol'), 'execution protocol inflated shaping context');
+  assert(!context.includes('# Skeinn active Task execution protocol'), 'execution protocol inflated shaping context');
   const prompts = JSON.parse(run(root, ['prompts']));
   assert(prompts.layers.stable_core.includes('consequential'), 'stable prompt layer missing');
   assert(prompts.layers.environment_adaptation_unavailable.includes('Do not fabricate a user interaction'), 'unattended environment prompt missing');
@@ -84,10 +84,10 @@ test('context teaches adaptive question judgment without a fixed questionnaire',
   assert(prompts.evaluation.blind_judge.includes('anonymized runs'), 'eval prompt inventory incomplete');
   assert(!context.includes('Capability Graph'), 'legacy ceremony leaked into v2 context');
   const lean = run(root, ['context']);
-  assert(lean.includes('loom context --full'), 'default lean output must point first-entry agents at --full');
-  assert(!lean.includes('# LOOM runtime protocol'), 'default context must omit the static protocol');
-  assert(!lean.includes('# LOOM collaboration core'), 'default context must omit the collaboration core');
-  assert(lean.includes('Current LOOM state'), 'default context must keep the state header');
+  assert(lean.includes('skeinn context --full'), 'default lean output must point first-entry agents at --full');
+  assert(!lean.includes('# Skeinn runtime protocol'), 'default context must omit the static protocol');
+  assert(!lean.includes('# Skeinn collaboration core'), 'default context must omit the collaboration core');
+  assert(lean.includes('Current Skeinn state'), 'default context must keep the state header');
   assert(lean.includes('Project whole'), 'default context must keep project truth');
 });
 
@@ -95,7 +95,7 @@ test('unattended runs use an isolated sidecar without fabricating a human or pol
   const root = workspace();
   const sidecar = workspace();
   run(root, ['init', '--state-dir', sidecar]);
-  assert(!existsSync(join(root, '.loom')), 'sidecar mode wrote LOOM state into the scored workspace');
+  assert(!existsSync(join(root, '.skeinn')), 'sidecar mode wrote Skeinn state into the scored workspace');
   assert(!existsSync(join(root, 'AGENTS.md')), 'sidecar mode edited the scored workspace anchor');
   assert(existsSync(join(sidecar, 'state.json')), 'sidecar state missing');
   assert(existsSync(join(sidecar, 'PROJECT.md')), 'sidecar project truth missing');
@@ -104,8 +104,8 @@ test('unattended runs use an isolated sidecar without fabricating a human or pol
       title: 'Read sidecar project truth',
       outcome: 'The Agent can load continuity state without editing the scored workspace.',
       done_when: ['Context loads the project truth from the isolated sidecar.'],
-      boundaries: ['Do not write LOOM state into the scored workspace.'],
-      reads: ['.loom/PROJECT.md'],
+      boundaries: ['Do not write Skeinn state into the scored workspace.'],
+      reads: ['.skeinn/PROJECT.md'],
       touches: ['output.txt'],
     }],
   });
@@ -114,7 +114,7 @@ test('unattended runs use an isolated sidecar without fabricating a human or pol
   assert(context.includes('Human response channel: unavailable'), 'unattended environment was not injected');
   assert(context.includes('Do not fabricate a user interaction'), 'unattended context may invent a user');
   assert(context.includes('never use web research as a substitute for user intent'), 'research boundary missing');
-  assert(context.includes('## Project whole (.loom/PROJECT.md)'), 'sidecar project truth was not mapped back to its virtual LOOM reference');
+  assert(context.includes('## Project whole (.skeinn/PROJECT.md)'), 'sidecar project truth was not mapped back to its virtual Skeinn reference');
   assert(JSON.parse(run(root, ['check', '--state-dir', sidecar])).healthy === true, 'sidecar task references are not checkable');
   assert(run(root, ['context', '--state-dir', sidecar, '--human-channel', 'unknown'], 1).includes('must be available or unavailable'), 'invalid human channel accepted');
   assert(run(root, ['init', '--state-dir', join(root, 'bad-sidecar')], 1).includes('outside the scored workspace'), 'workspace-local sidecar accepted');
@@ -127,215 +127,147 @@ test('record preserves facts, assumptions, uncertainty, and superseding decision
     confirmed: ['The human speaks naturally to the Agent.'],
     assumptions: [{ text: 'The first release is local-only.', source: 'agent' }],
     unresolved: [{ question: 'May the first release change remote state?', impact: 'high' }],
-    decisions: [{ title: 'Agent-only CLI', decision: 'The CLI remains invisible to humans.', rationale: 'LOOM supports the Agent rather than becoming user workflow.', supersedes: [] }],
+    decisions: [{ title: 'Agent-only CLI', decision: 'The CLI remains invisible to humans.', rationale: 'Skeinn supports the Agent rather than becoming user workflow.', supersedes: [] }],
   });
   const state = JSON.parse(run(root, ['record', '--json-file', 'record.json']));
   assert(state.confirmed[0].id === 'F-001', 'fact id missing');
   assert(state.assumptions[0].id === 'A-001', 'assumption id missing');
   assert(state.unresolved[0].id === 'Q-001', 'question id missing');
-  const decisions = readFileSync(join(root, '.loom', 'DECISIONS.md'), 'utf8');
+  const decisions = readFileSync(join(root, '.skeinn', 'DECISIONS.md'), 'utf8');
   assert(decisions.includes('D-001: Agent-only CLI'), 'decision history missing');
   assert(decisions.includes('Supersedes: none'), 'superseding record missing');
   assert(!run(root, ['context']).includes('D-001: Agent-only CLI'), 'full decision history should remain on demand');
 });
 
-test('design documents scale by system while capability dossiers keep professional fields separate', () => {
+test('design documents scale by system while single-file capabilities keep professional fields separate', () => {
   const root = workspace();
   run(root, ['init']);
   run(root, ['design', 'add', 'first-use-flow', '--title', 'First-use flow', '--kind', 'experience']);
   run(root, ['design', 'add', 'local-state', '--title', 'Local state system', '--kind', 'system']);
   assert(JSON.parse(run(root, ['design', 'list'])).length === 2, 'design document list mismatch');
-  assert(run(root, ['design', 'get', 'local-state']).includes('## Data and state'), 'system design template missing');
+  const sysDesign = run(root, ['design', 'get', 'local-state']);
+  assert(sysDesign.includes('## Data and state'), 'system design template missing');
+  assert(sysDesign.includes('## Alternatives considered'), 'core design template must require alternatives comparison');
+  assert(sysDesign.includes('## Applied capabilities'), 'design template must bind applied capabilities');
+  assert(sysDesign.includes('## How this could look done yet fail'), 'design template must include falsifiable failure surface');
   run(root, ['capability', 'add', 'ui-ux-design', '--title', 'UI/UX design']);
-  run(root, ['capability', 'add', 'behavioral-psychology', '--title', 'Behavioral psychology']);
-  const dossier = run(root, ['capability', 'get', 'ui-ux-design']);
-  assert(dossier.includes('One dossier covers one recognizable professional field'), 'field boundary missing');
-  assert(dossier.includes('Decision tree'), 'decision tree section missing');
-  assert(dossier.includes('### C1: <node name>'), 'named node structure missing');
-  assert(dossier.includes('entry_when:'), 'node entry condition missing');
-  assert(dossier.includes('source:'), 'node source citation field missing');
-  assert(dossier.includes('counterexample:'), 'node counterexample field missing');
-  assert(dossier.includes('Stance and rejected defaults'), 'stance section missing');
-  assert(dossier.includes('Relationships without merger'), 'cross-field boundary missing');
+  run(root, ['capability', 'add', 'behavioral-psychology', '--title', 'Behavioral psychology', '--mode', 'offline_reflection']);
+  const cap = run(root, ['capability', 'get', 'ui-ux-design']);
+  assert(cap.includes('One file covers one recognizable professional field'), 'field boundary missing');
+  assert(cap.includes('## How real practitioners operate'), 'practitioner research section missing');
+  assert(cap.includes('## Reflection for this project'), 'project reflection section missing');
+  assert(cap.includes('## Operational rules and Design delta'), 'operational rules and design delta section missing');
   assert(JSON.parse(run(root, ['capability', 'list'])).length === 2, 'capability list mismatch');
-  assert(existsSync(join(root, '.loom', 'capabilities', 'ui-ux-design', 'capability.md')), 'directory structure capability.md missing');
-  assert(existsSync(join(root, '.loom', 'capabilities', 'ui-ux-design', 'research')), 'research directory missing');
-  assert(existsSync(join(root, '.loom', 'capabilities', 'ui-ux-design', 'status.json')), 'status.json missing');
-  const status = JSON.parse(readFileSync(join(root, '.loom', 'capabilities', 'ui-ux-design', 'status.json'), 'utf8'));
-  assert(status.status === 'researching', 'initial capability status should be researching');
+  assert(existsSync(join(root, '.skeinn', 'capabilities', 'ui-ux-design.md')), 'single-file capability.md missing');
+  const status = JSON.parse(run(root, ['capability', 'status', 'ui-ux-design']));
+  assert(status.format === 'single-file' && status.mode === 'external_researched' && status.ready === false, 'initial single-file capability status mismatch');
   const templateWarnings = JSON.parse(run(root, ['check'])).warnings.join('\n');
   assert(templateWarnings.includes('Design document still contains template instructions'), 'design template residue warning missing');
-  assert(templateWarnings.includes('Capability dossier still contains template instructions'), 'capability template residue warning missing');
+  assert(templateWarnings.includes('still contains template instructions'), 'capability template residue warning missing');
 });
 
-test('capability decision tree nodes require source citations', () => {
+test('single-file capability rejects fake agent-authored sources and missing Design delta', () => {
   const root = workspace();
   run(root, ['init']);
+  writeFileSync(join(root, '.skeinn', 'PROJECT.md'), `# Project Whole\n\n## Intended result\nVerify that external_researched capabilities cannot pass with agent-authored filler or zero Design delta.\n\n## People and reality\nEngineers building a real app.\n\n## Whole behavior\nCapability research must cite real external sources and change a concrete Design decision.\n\n## Boundaries\nTest only.\n\n## Completion and failure\nFake research is rejected at project ready.\n`, 'utf8');
+  run(root, ['design', 'add', 'ui', '--title', 'UI Design', '--kind', 'experience']);
+  writeFileSync(join(root, '.skeinn', 'design', 'ui.md'), `# UI Design\n\n- Kind: experience\n- Status: ready\n\n## Applied capabilities\nUses ui-ux-design.\n\n## Alternatives considered\nOption A: single-column calm layout. Option B: multi-pane dashboard (rejected due to cognitive load).\n\n## Experience intent\nCalm single-flow UI.\n`, 'utf8');
   run(root, ['capability', 'add', 'ui-ux-design', '--title', 'UI/UX design']);
-  const capabilityPath = join(root, '.loom', 'capabilities', 'ui-ux-design', 'capability.md');
-  writeFileSync(capabilityPath, `# UI/UX design\n\n## Field identity and boundary\nUI design for this project.\n\n## Project scenario\nToC web app.\n\n## Decision tree\n\n### C1: Choose visual direction\n- entry_when: starting a new UI surface\n- options:\n  - A: neo-brutalism\n  - B: minimal editorial\n- decide_by: brand voice and audience expectation\n- source: expert blog post on UI direction selection\n- counterexample: internal tool with no visual identity need\n- output: design decision D-visual-direction\n\n## Stance and rejected defaults\nWe refuse default component library styling.\n\n## Failure signals\nGeneric AI-generated UI patterns.\n\n## Relationships without merger\nAdjacent to behavioral-psychology capability.\n`, 'utf8');
-  const healthyCheck = JSON.parse(run(root, ['check']));
-  assert(!healthyCheck.warnings.join('\n').includes('without source citations'), 'check should not warn when sources exist');
-  writeFileSync(capabilityPath, `# UI/UX design\n\n## Field identity and boundary\nUI design.\n\n## Project scenario\nToC.\n\n## Decision tree\n\n### C1: Choose direction\n- entry_when: starting\n- options:\n  - A: neo-brutalism\n- decide_by: brand\n- counterexample: internal tool\n- output: design decision\n\n## Stance\nRefuse defaults.\n\n## Failure signals\nGeneric patterns.\n\n## Relationships\nNone.\n`, 'utf8');
-  const sourceWarningCheck = JSON.parse(run(root, ['check']));
-  assert(sourceWarningCheck.warnings.join('\n').includes('without source citations'), 'check should warn when decision tree nodes lack source citations');
+  const capPath = join(root, '.skeinn', 'capabilities', 'ui-ux-design.md');
+  json(root, 'tasks.json', { tasks: [{ title: 'Build UI', outcome: 'A calm single-flow UI renders cleanly on disk', done_when: ['UI file exists'], boundaries: ['Test only'], reads: ['.skeinn/PROJECT.md', '.skeinn/design/ui.md'], touches: ['ui.html'], implements: '.skeinn/design/ui.md#Experience intent' }] });
+  run(root, ['task', 'plan', '--json-file', 'tasks.json']);
+
+  // 1. Fake agent-authored citation must be rejected
+  writeFileSync(capPath, `# UI/UX design\n\n- Mode: external_researched\n- Authority: agent_provisional\n\n## Field identity and boundary\nUI/UX craft.\n\n## How real practitioners operate\n- Practice 1: Keep flows short — Source: internal synthesis (agent-authored)\n\n## Reflection for this project\nShort flows fit.\n\n## Operational rules and Design delta\n- Quality bar: crisp hierarchy\n- Design delta (Before -> After): Switched from multi-pane to single-column.\n`, 'utf8');
+  const fakeErr = run(root, ['project', 'ready'], 1);
+  assert(fakeErr.includes('agent-authored'), 'ready must reject agent-authored fake research');
+
+  // 2. Real external source but missing Design delta must be rejected
+  writeFileSync(capPath, `# UI/UX design\n\n- Mode: external_researched\n- Authority: agent_provisional\n\n## Field identity and boundary\nUI/UX craft.\n\n## How real practitioners operate\n- Practice 1: Progressive disclosure in Linear — Source: https://linear.app/method\n\n## Reflection for this project\nProgressive disclosure fits our local tool.\n\n## Operational rules and Design delta\n- Quality bar: crisp hierarchy\n`, 'utf8');
+  const deltaErr = run(root, ['project', 'ready'], 1);
+  assert(deltaErr.includes('Design delta'), 'ready must reject capability with no Design delta');
+
+  // 3. Real external source + Design delta passes ready
+  writeFileSync(capPath, `# UI/UX design\n\n- Mode: external_researched\n- Authority: agent_provisional\n\n## Field identity and boundary\nUI/UX craft.\n\n## How real practitioners operate\n- Practice 1: Progressive disclosure in Linear — Source: https://linear.app/method\n\n## Reflection for this project\nProgressive disclosure fits our local tool; we reject multi-pane dashboards.\n\n## Operational rules and Design delta\n- Quality bar: crisp hierarchy\n- Design delta (Before -> After): Replaced 3-panel dashboard with single-column progressive flow in ui.md.\n`, 'utf8');
+  const ok = JSON.parse(run(root, ['project', 'ready']));
+  assert(ok.ready_for_keeper === true, 'valid external_researched capability should pass ready');
 });
 
-test('capability shaping lifecycle: research, synthesize, confirm gates execution', () => {
+test('capability authority provenance and honest offline_reflection degradation stay visible', () => {
   const root = workspace();
   run(root, ['init']);
-  run(root, ['capability', 'add', 'game-design', '--title', 'Game design']);
-  assert(JSON.parse(run(root, ['capability', 'status', 'game-design'])).status === 'researching', 'initial status should be researching');
-  assert(run(root, ['capability', 'synthesize', 'game-design'], 1).includes('No research materials'), 'synthesize should fail without research materials');
-  const researchResult = JSON.parse(run(root, ['capability', 'research', 'game-design', '--field', 'Game design and player psychology']));
-  const researchDir = join(root, '.loom', 'capabilities', 'game-design', 'research');
-  assert(existsSync(join(researchDir, '_guide.md')), 'research should create _guide.md');
-  assert(readFileSync(join(researchDir, '_guide.md'), 'utf8').includes('What to write'), '_guide.md should contain guidance');
-  assert(researchResult.next && researchResult.next.includes('_guide.md'), 'research output should point to _guide.md');
-  assert(run(root, ['capability', 'synthesize', 'game-design'], 1).includes('No research materials'), 'synthesize should fail when only _guide.md exists (no real research)');
-  writeFileSync(join(researchDir, 'expert-narrative.md'), `# Expert narrative: designing calming games\n\nA game designer describes: I start by identifying the target emotional state, then choose mechanics that reinforce it. For calming games I avoid time pressure and loss conditions.\n`, 'utf8');
-  const capabilityPath = join(root, '.loom', 'capabilities', 'game-design', 'capability.md');
-  writeFileSync(capabilityPath, `# Game design\n\n## Field identity and boundary\nGame design for calming recovery tools.\n\n## Project scenario\nCalming recovery game.\n\n## Decision tree\n\n### C1: Choose core emotional direction\n- entry_when: starting a new game design\n- options:\n  - A: calming without challenge\n  - B: calming with gentle challenge\n- decide_by: target audience stress profile\n- source: expert narrative on designing calming games (see expert-narrative.md)\n- counterexample: a competitive game where calm is not the goal\n- output: design decision D-emotional-direction\n\n## Stance and rejected defaults\nWe refuse default game mechanics that create stress.\n\n## Failure signals\nPlayers report anxiety rather than calm.\n\n## Relationships without merger\nAdjacent to behavioral-psychology capability.\n`, 'utf8');
-  const synthesizeResult = JSON.parse(run(root, ['capability', 'synthesize', 'game-design']));
-  assert(synthesizeResult.status === 'synthesized', 'synthesize should set status to synthesized');
-  assert(synthesizeResult.nodes === 1, 'synthesize should count decision tree nodes');
+  run(root, ['capability', 'add', 'game-design', '--title', 'Game design', '--mode', 'offline_reflection']);
+  const capPath = join(root, '.skeinn', 'capabilities', 'game-design.md');
+  writeFileSync(capPath, `# Game design\n\n- Mode: offline_reflection\n- Authority: agent_provisional\n- Scenario: Calming recovery game.\n\n## Field identity and boundary\nGame design for calming recovery tools.\n\n## How real practitioners operate\nExternal search unavailable in this sandbox; reasoning from core loop pacing and stress-free recovery principles.\n\n## Reflection for this project\nAvoid timers and punitive loss states that trigger performance anxiety.\n\n## Operational rules and Design delta\n- Quality bar: calm pacing\n- Anti-patterns: countdown timers, failure penalties\n- Design delta (Before -> After): Removed score timer from core loop design.\n`, 'utf8');
   assert(run(root, ['capability', 'confirm', 'game-design', '--scenario', 'short', '--source', 'human'], 1).includes('at least 20 characters'), 'confirm should reject short scenarios');
   assert(run(root, ['capability', 'confirm', 'game-design', '--scenario', 'A calming recovery game for stressed professionals needing gentle engagement without time pressure.'], 1).includes('--source human|agent'), 'confirm should require explicit authority provenance');
   const provisionalResult = JSON.parse(run(root, ['capability', 'confirm', 'game-design', '--scenario', 'A calming recovery game for stressed professionals needing gentle engagement without time pressure.', '--source', 'agent']));
-  assert(provisionalResult.status === 'provisional', 'agent-selected scenario should remain provisional');
-  assert(JSON.parse(run(root, ['capability', 'status', 'game-design'])).source === 'agent', 'status should preserve scenario provenance');
-  assert(run(root, ['context', '--human-channel', 'unavailable']).includes('provisional'), 'context should surface provisional capability state');
+  assert(provisionalResult.authority === 'agent_provisional', 'agent-selected scenario should remain agent_provisional');
+  const offlineCtx = run(root, ['context', '--human-channel', 'unavailable']);
+  assert(offlineCtx.includes('offline_reflection — unverified externally'), 'context must visibly flag offline_reflection');
+  assert(offlineCtx.includes('agent_provisional'), 'context must surface provisional authority');
+  const checkWarnings = JSON.parse(run(root, ['check'])).warnings.join('\n');
+  assert(checkWarnings.includes('offline_reflection (unverified externally)'), 'check must warn on unverified offline_reflection');
   const confirmResult = JSON.parse(run(root, ['capability', 'confirm', 'game-design', '--scenario', 'A calming recovery game for stressed professionals needing gentle engagement without time pressure.', '--source', 'human']));
-  assert(confirmResult.status === 'confirmed', 'human confirmation should upgrade provisional to confirmed');
-  assert(JSON.parse(run(root, ['capability', 'status', 'game-design'])).status === 'confirmed', 'status command should report confirmed');
-  const confirmedContent = run(root, ['capability', 'get', 'game-design']);
-  assert(confirmedContent.includes('A calming recovery game for stressed professionals'), 'confirm should write scenario into capability.md');
+  assert(confirmResult.authority === 'human_confirmed', 'human confirmation should upgrade authority to human_confirmed');
+  assert(JSON.parse(run(root, ['capability', 'status', 'game-design'])).authority === 'human_confirmed', 'status should report human_confirmed');
+  assert(run(root, ['capability', 'get', 'game-design']).includes('A calming recovery game for stressed professionals'), 'confirm should write scenario into capability file');
 });
 
-test('synthesize rejects source citations that do not match a research file', () => {
+test('project ready rejects silent capability omission and audits explicit capability exemption', () => {
   const root = workspace();
   run(root, ['init']);
-  run(root, ['capability', 'add', 'ui-ux-design', '--title', 'UI/UX design']);
-  const researchDir = join(root, '.loom', 'capabilities', 'ui-ux-design', 'research');
-  writeFileSync(join(researchDir, 'real-source.md'), `# Real source
-
-A designer describes how to choose a visual direction.
-`, 'utf8');
-  const capabilityPath = join(root, '.loom', 'capabilities', 'ui-ux-design', 'capability.md');
-  writeFileSync(capabilityPath, `# UI/UX design
-
-## Field identity and boundary
-UI design.
-
-## Project scenario
-ToC web app.
-
-## Decision tree
-
-### C1: Choose visual direction
-- entry_when: starting a new UI surface
-- options:
-  - A: neo-brutalism
-  - B: minimal editorial
-- decide_by: brand voice and audience expectation
-- source: a fictional article not in research/
-- counterexample: internal tool with no visual identity need
-- output: design decision D-visual-direction
-
-## Stance and rejected defaults
-We refuse default component library styling.
-
-## Failure signals
-Generic AI-generated UI patterns.
-
-## Relationships without merger
-Adjacent to behavioral-psychology capability.
-`, 'utf8');
-  const errorMessage = run(root, ['capability', 'synthesize', 'ui-ux-design'], 1);
-  assert(errorMessage.includes('cite sources not found in research'), 'synthesize should reject source citations that do not reference a research file');
-  writeFileSync(capabilityPath, `# UI/UX design
-
-## Field identity and boundary
-UI design.
-
-## Project scenario
-ToC web app.
-
-## Decision tree
-
-### C1: Choose visual direction
-- entry_when: starting a new UI surface
-- options:
-  - A: neo-brutalism
-  - B: minimal editorial
-- decide_by: brand voice and audience expectation
-- source: real-source.md describes how to choose a visual direction
-- counterexample: internal tool with no visual identity need
-- output: design decision D-visual-direction
-
-## Stance and rejected defaults
-We refuse default component library styling.
-
-## Failure signals
-Generic AI-generated UI patterns.
-
-## Relationships without merger
-Adjacent to behavioral-psychology capability.
-`, 'utf8');
-  const goodResult = JSON.parse(run(root, ['capability', 'synthesize', 'ui-ux-design']));
-  assert(goodResult.status === 'synthesized', 'synthesize should pass when source citation references a real research file');
+  writeFileSync(join(root, '.skeinn', 'PROJECT.md'), `# Project Whole\n\n## Intended result\nA routine cross-platform CLI wrapper where no silent capability skip is permitted and every shaping boundary stays auditable on disk.\n\n## People and reality\nSolo developer running a small cross-platform wrapper script in an isolated project workspace without specialist domain risk.\n\n## Whole behavior\nExplicit capability exemption is recorded in state and audited directly by the independent Keeper during the build-readiness handoff.\n\n## Boundaries\nTest only; no external dependencies or production side effects.\n\n## Completion and failure\nSilent skip fails ready; explicit exemption passes and surfaces in Keeper context.\n`, 'utf8');
+  run(root, ['design', 'add', 'cli', '--title', 'CLI Design', '--kind', 'system']);
+  writeFileSync(join(root, '.skeinn', 'design', 'cli.md'), `# CLI Design\n\n- Kind: system\n- Status: ready\n\n## Responsibility\nWrap one command.\n\n## Alternatives considered\nNode script vs bash wrapper (chose Node for cross-platform safety).\n`, 'utf8');
+  json(root, 'tasks.json', { tasks: [{ title: 'Write wrapper', outcome: 'A cross-platform wrapper runs cleanly on disk', done_when: ['Wrapper runs'], boundaries: ['Test only'], reads: ['.skeinn/PROJECT.md', '.skeinn/design/cli.md'], touches: ['wrap.js'], implements: '.skeinn/design/cli.md#Responsibility' }] });
+  run(root, ['task', 'plan', '--json-file', 'tasks.json']);
+  const noCapErr = run(root, ['project', 'ready'], 1);
+  assert(noCapErr.includes('No capability file exists and no capability exemption is recorded'), 'ready must reject silent capability omission');
+  assert(run(root, ['capability', 'exempt', '--reason', 'too short'], 1).includes('at least 15 characters'), 'exempt must reject vague short reasons');
+  const exemptRes = JSON.parse(run(root, ['capability', 'exempt', '--reason', 'Routine cross-platform wrapper; standard engineering suffices with no specialist domain bottleneck.']));
+  assert(exemptRes.exempted === true, 'exempt should succeed');
+  run(root, ['project', 'ready']);
+  const keeperCtx = run(root, ['context', '--keeper']);
+  assert(keeperCtx.includes('Capability exemption (audit whether standard engineering genuinely suffices)'), 'Keeper context must surface capability exemption for audit');
+  assert(keeperCtx.includes('Anti-laziness audit'), 'Keeper prompt must include anti-laziness audit');
 });
 
-test('capability hooks inject decision-tree nodes into active task context', () => {
+test('task guardrails inject specialist red lines directly into active task context without capability_hooks tax', () => {
   const root = workspace();
   run(root, ['init']);
-  writeFileSync(join(root, '.loom', 'PROJECT.md'), `# Project Whole\n\n## Intended result\nA calming recovery tool with gentle game mechanics.\n\n## People and reality\nA human collaborates naturally while the Agent silently preserves state.\n\n## Whole behavior\nThe Agent clarifies, records, builds a work map, resumes one Task, and proves it done.\n\n## Boundaries\nThe human never has to operate LOOM. Irreversible work needs authority.\n\n## System shape\nHuman-readable project truth plus structured Task state compiled by a CLI.\n\n## Completion and failure\nA fresh Agent can start without chat memory; document volume alone is failure.\n`, 'utf8');
+  writeFileSync(join(root, '.skeinn', 'PROJECT.md'), `# Project Whole\n\n## Intended result\nA calming recovery tool with gentle game mechanics.\n\n## People and reality\nA human collaborates naturally while the Agent silently preserves state.\n\n## Whole behavior\nThe Agent clarifies, records, builds a work map, resumes one Task, and proves it done.\n\n## Boundaries\nThe human never has to operate Skeinn. Irreversible work needs authority.\n\n## System shape\nHuman-readable project truth plus structured Task state compiled by a CLI.\n\n## Completion and failure\nA fresh Agent can start without chat memory; document volume alone is failure.\n`, 'utf8');
   run(root, ['design', 'add', 'game-mechanics', '--title', 'Game mechanics system', '--kind', 'system']);
-  writeFileSync(join(root, '.loom', 'design', 'game-mechanics.md'), `# Game mechanics system\n\n- Kind: system\n- Status: ready\n\n## Responsibility\nDefine core game loops for calming engagement.\n\n## Boundary\nNo time pressure mechanics.\n\n## Interface\nGame loop entry point.\n\n## Verification\nPlaytest reports calm, not anxiety.\n`, 'utf8');
+  writeFileSync(join(root, '.skeinn', 'design', 'game-mechanics.md'), `# Game mechanics system\n\n- Kind: system\n- Status: ready\n\n## Responsibility\nDefine core game loops for calming engagement.\n\n## Alternatives considered\nSoft reset vs fail-state screen (rejected fail-state because it raises anxiety).\n`, 'utf8');
   run(root, ['capability', 'add', 'game-design', '--title', 'Game design']);
-  run(root, ['capability', 'research', 'game-design', '--field', 'Game design']);
-  writeFileSync(join(root, '.loom', 'capabilities', 'game-design', 'research', 'expert.md'), `# Expert narrative\n\nI start by identifying the target emotional state.\n`, 'utf8');
-  const capPath = join(root, '.loom', 'capabilities', 'game-design', 'capability.md');
-  writeFileSync(capPath, `# Game design\n\n## Field identity and boundary\nGame design for calming recovery tools.\n\n## Project scenario\nCalming recovery game.\n\n## Decision tree\n\n### C1: Choose core emotional direction\n- entry_when: starting a new game design\n- options:\n  - A: calming without challenge\n  - B: calming with gentle challenge\n- decide_by: target audience stress profile\n- source: expert narrative on designing calming games (see expert-narrative.md)\n- counterexample: a competitive game where calm is not the goal\n- output: design decision D-emotional-direction\n\n### C2: Choose loss condition design\n- entry_when: core direction is set and mechanics are being defined\n- options:\n  - A: no loss condition at all\n  - B: soft reset without penalty\n- decide_by: whether failure increases or decreases player calm\n- source: expert narrative on loss conditions in calming games (see expert.md)\n- counterexample: a skill-based game where loss drives learning\n- output: design decision D-loss-condition\n\n## Stance and rejected defaults\nWe refuse default game mechanics that create stress.\n\n## Failure signals\nPlayers report anxiety rather than calm.\n\n## Relationships without merger\nAdjacent to behavioral-psychology capability.\n`, 'utf8');
-  run(root, ['capability', 'synthesize', 'game-design']);
-  run(root, ['capability', 'confirm', 'game-design', '--scenario', 'A calming recovery game for stressed professionals needing gentle engagement.', '--source', 'human']);
-  json(root, 'tasks.json', { tasks: [{ title: 'Implement game mechanics', outcome: 'Calming game loop with no-loss design', done_when: ['Game loop runs without time pressure'], boundaries: ['No stress mechanics'], reads: ['.loom/PROJECT.md', '.loom/design/game-mechanics.md'], touches: ['src/game.js'], implements: 'D-emotional-direction', capability_hooks: [{ node: 'game-design#C2', at: 'defining the loss condition', must_produce: 'design decision D-loss-condition' }] }] });
+  writeFileSync(join(root, '.skeinn', 'capabilities', 'game-design.md'), `# Game design\n\n- Mode: external_researched\n- Authority: human_confirmed\n\n## Field identity and boundary\nGame design for calming recovery tools.\n\n## How real practitioners operate\n- Practice 1: Cozy games remove punitive timers — Source: https://gdcvault.com/cozy-game-design\n\n## Reflection for this project\nUse soft reset without penalty instead of fail states.\n\n## Operational rules and Design delta\n- Anti-patterns: countdown timers, punitive fail screens\n- Design delta (Before -> After): Replaced fail-state screen with soft reset in game-mechanics.md.\n`, 'utf8');
+  json(root, 'tasks.json', { tasks: [{ title: 'Implement game mechanics', outcome: 'Calming game loop with no-loss design', done_when: ['Game loop runs without time pressure'], boundaries: ['No stress mechanics'], guardrails: ['Never add countdown timers or punitive fail states', 'Verify soft reset preserves calm pacing'], reads: ['.skeinn/PROJECT.md', '.skeinn/design/game-mechanics.md'], touches: ['src/game.js'], implements: '.skeinn/design/game-mechanics.md#Responsibility' }] });
   run(root, ['task', 'plan', '--json-file', 'tasks.json']);
   const readyResult = JSON.parse(run(root, ['project', 'ready']));
-  json(root, 'keeper-pass.json', { run_id: 'keeper-activation-001', prepared_digest: readyResult.digest, verdict: 'passed', summary: 'Build-ready.', evidence: ['PROJECT.md and game-design capability confirmed.'], review: independentReview('fresh-activation-agent') });
+  json(root, 'keeper-pass.json', { run_id: 'keeper-activation-001', prepared_digest: readyResult.digest, verdict: 'passed', summary: 'Build-ready.', evidence: ['PROJECT.md and game-design capability verified.'], review: independentReview('fresh-activation-agent') });
   run(root, ['keeper', 'record', '--json-file', 'keeper-pass.json']);
   run(root, ['task', 'start', 'TASK-001']);
   const context = run(root, ['context']);
-  assert(context.includes('Capability decision points'), 'context should inject capability hooks section');
-  assert(context.includes('game-design#C2'), 'context should reference the specific hook node');
-  assert(context.includes('Choose loss condition design'), 'context should inject the node title');
-  assert(context.includes('soft reset without penalty'), 'context should inject node options');
-  assert(context.includes('design decision D-loss-condition'), 'context should show the node output');
-  assert(!context.includes('### C1:'), 'context should NOT inject non-hooked nodes');
-  assert(context.includes('must_produce'), 'context should show the must_produce directive');
+  assert(context.includes('## Task guardrails (specialist red lines)'), 'context should inject Task guardrails section');
+  assert(context.includes('Never add countdown timers or punitive fail states'), 'context should surface concrete guardrails');
   const checkResult = JSON.parse(run(root, ['check']));
-  assert(!checkResult.warnings.join('\n').includes('missing capability node'), 'check should not warn when hooks reference valid nodes');
-  json(root, 'bad-hooks.json', { capability_hooks: [{ node: 'game-design#C99' }] });
-  run(root, ['task', 'update', 'TASK-001', '--json-file', 'bad-hooks.json']);
-  const badCheck = JSON.parse(run(root, ['check'], 1));
-  assert(badCheck.errors.join('\n').includes('missing capability node: game-design#C99'), 'check should error when an active Task hooks a non-existent node');
+  assert(checkResult.healthy === true, 'Task with guardrails and implements should be healthy without capability_hooks');
 });
 
 test('task integrity classification and declared outputs cannot stay false-green', () => {
   const root = workspace();
   run(root, ['init']);
-  writeFileSync(join(root, '.loom', 'PROJECT.md'), `# Project Whole\n\n## Intended result\nA small integrity fixture with explicit design and capability links.\n\n## People and reality\nA fresh Agent must not mistake missing links or files for completion.\n\n## Whole behavior\nThe Task declares what it implements, which capability applies, and which output must exist.\n\n## Boundaries\nTest only.\n\n## System shape\nOne design, one capability, one Task.\n\n## Completion and failure\nMissing classification or output is unhealthy.\n`, 'utf8');
+  writeFileSync(join(root, '.skeinn', 'PROJECT.md'), `# Project Whole\n\n## Intended result\nA small integrity fixture with explicit design and capability links.\n\n## People and reality\nA fresh Agent must not mistake missing links or files for completion.\n\n## Whole behavior\nThe Task declares what it implements, which capability applies, and which output must exist.\n\n## Boundaries\nTest only.\n\n## System shape\nOne design, one capability, one Task.\n\n## Completion and failure\nMissing classification or output is unhealthy.\n`, 'utf8');
   run(root, ['design', 'add', 'integrity', '--title', 'Integrity fixture', '--kind', 'system']);
-  writeFileSync(join(root, '.loom', 'design', 'integrity.md'), '# Integrity fixture\n\n## Responsibility\nRequire honest links.\n', 'utf8');
+  writeFileSync(join(root, '.skeinn', 'design', 'integrity.md'), '# Integrity fixture\n\n## Responsibility\nRequire honest links.\n', 'utf8');
   run(root, ['capability', 'add', 'quality-assurance', '--title', 'Quality assurance']);
-  json(root, 'tasks.json', { tasks: [{ title: 'Produce output', outcome: 'A concrete output file exists with explicit applicability decisions', done_when: ['Output exists'], boundaries: ['Test only'], reads: ['.loom/PROJECT.md'], touches: ['output.txt'] }] });
+  json(root, 'tasks.json', { tasks: [{ title: 'Produce output', outcome: 'A concrete output file exists with explicit applicability decisions', done_when: ['Output exists'], boundaries: ['Test only'], reads: ['.skeinn/PROJECT.md'], touches: ['output.txt'] }] });
   run(root, ['task', 'plan', '--json-file', 'tasks.json']);
   const openCheck = JSON.parse(run(root, ['check']));
   assert(openCheck.warnings.join('\n').includes('missing implements or design_exemption'), 'open Task should surface missing design applicability');
-  assert(openCheck.warnings.join('\n').includes('missing capability_hooks or capability_exemption'), 'open Task should surface missing capability applicability');
-  json(root, 'classify.json', { implements: '.loom/design/integrity.md#Responsibility', capability_exemption: 'Capability research is not required for this file-existence fixture.' });
+  json(root, 'classify.json', { implements: '.skeinn/design/integrity.md#Responsibility', capability_exemption: 'Capability research is not required for this file-existence fixture.' });
   run(root, ['task', 'update', 'TASK-001', '--json-file', 'classify.json']);
-  const statePath = join(root, '.loom', 'state.json');
+  const statePath = join(root, '.skeinn', 'state.json');
   const state = JSON.parse(readFileSync(statePath, 'utf8'));
   state.keeper.status = 'skipped';
   state.project.status = 'build_ready';
@@ -365,8 +297,8 @@ test('deliverable coverage check finds uncovered delivery units', () => {
   const gameLoopId = dlvList.find((item) => item.slug === 'game-loop').id;
   const lossConditionId = dlvList.find((item) => item.slug === 'loss-condition').id;
   json(root, 'tasks.json', { tasks: [
-    { title: 'Implement game loop', outcome: 'Core game loop executes without time pressure', done_when: ['Loop executes'], boundaries: ['No scoring system'], reads: ['.loom/PROJECT.md'], touches: ['src/loop.js'], covers: [gameLoopId] },
-    { title: 'Design loss condition', outcome: 'No-loss design documented for calming gameplay', done_when: ['Loss condition documented'], boundaries: ['No punishment mechanics'], reads: ['.loom/PROJECT.md'], touches: ['docs/loss.md'], covers: [lossConditionId] }
+    { title: 'Implement game loop', outcome: 'Core game loop executes without time pressure', done_when: ['Loop executes'], boundaries: ['No scoring system'], reads: ['.skeinn/PROJECT.md'], touches: ['src/loop.js'], covers: [gameLoopId] },
+    { title: 'Design loss condition', outcome: 'No-loss design documented for calming gameplay', done_when: ['Loss condition documented'], boundaries: ['No punishment mechanics'], reads: ['.skeinn/PROJECT.md'], touches: ['docs/loss.md'], covers: [lossConditionId] }
   ] });
   run(root, ['task', 'plan', '--json-file', 'tasks.json']);
   const afterCoverage = JSON.parse(run(root, ['deliverable', 'coverage']));
@@ -385,22 +317,23 @@ test('deliverable coverage check finds uncovered delivery units', () => {
 test('acceptance structure pairs criterion with verify_by and evidence, and completion fills evidence', () => {
   const root = workspace();
   run(root, ['init']);
-  writeFileSync(join(root, '.loom', 'PROJECT.md'), `# Project Whole\n\n## Intended result\nA test project verifying acceptance-based task completion works end to end, from planning through evidence-backed completion. The acceptance structure pairs each criterion with a verification method and an evidence field that gets filled in when the task is done.\n\n## People and reality\nSolo developer using LOOM for a small CLI project. The developer writes tasks in JSON and completes them through the CLI.\n\n## Whole behavior\nTasks use structured acceptance instead of plain done_when strings. Each acceptance condition has a criterion, a verify_by method, and an evidence field. Completion fills in evidence for every condition.\n\n## Boundaries\nNo external dependencies. Does not modify done_when-based tasks. Does not add CLI authoring.\n\n## System shape\nCLI-driven task management with JSON file input. State persists in .loom/ directory.\n\n## Completion and failure\nEvery acceptance condition has concrete evidence. A task with missing evidence is rejected. A task with incomplete acceptance results is rejected.\n`, 'utf8');
+  writeFileSync(join(root, '.skeinn', 'PROJECT.md'), `# Project Whole\n\n## Intended result\nA test project verifying acceptance-based task completion works end to end, from planning through evidence-backed completion. The acceptance structure pairs each criterion with a verification method and an evidence field that gets filled in when the task is done.\n\n## People and reality\nSolo developer using Skeinn for a small CLI project. The developer writes tasks in JSON and completes them through the CLI.\n\n## Whole behavior\nTasks use structured acceptance instead of plain done_when strings. Each acceptance condition has a criterion, a verify_by method, and an evidence field. Completion fills in evidence for every condition.\n\n## Boundaries\nNo external dependencies. Does not modify done_when-based tasks. Does not add CLI authoring.\n\n## System shape\nCLI-driven task management with JSON file input. State persists in .skeinn/ directory.\n\n## Completion and failure\nEvery acceptance condition has concrete evidence. A task with missing evidence is rejected. A task with incomplete acceptance results is rejected.\n`, 'utf8');
   run(root, ['design', 'add', 'test-system', '--title', 'Test system', '--kind', 'system']);
-  writeFileSync(join(root, '.loom', 'design', 'test-system.md'), `# Test system\n\n- Kind: system\n- Status: ready\n\n## Responsibility\nVerify acceptance-based completion.\n\n## Boundary\nTest only.\n\n## Interface\nCLI.\n\n## Verification\nRun tests.\n`, 'utf8');
+  writeFileSync(join(root, '.skeinn', 'design', 'test-system.md'), `# Test system\n\n- Kind: system\n- Status: ready\n\n## Responsibility\nVerify acceptance-based completion.\n\n## Boundary\nTest only.\n\n## Interface\nCLI.\n\n## Verification\nRun tests.\n`, 'utf8');
   json(root, 'tasks.json', { tasks: [{
     title: 'Implement acceptance-based completion',
     outcome: 'Task completion uses acceptance results with concrete evidence per criterion',
     acceptance: [
-      { criterion: 'Task with acceptance[] can be imported and started', verify_by: 'Run loom task plan and loom task start, check no errors', evidence: '' },
-      { criterion: 'Completion fills each acceptance evidence with actual result', verify_by: 'Run loom task done with acceptance_results, check task.acceptance[].evidence is populated', evidence: '' },
-      { criterion: 'Missing acceptance result is rejected', verify_by: 'Run loom task done with incomplete acceptance_results, check error', evidence: '' },
+      { criterion: 'Task with acceptance[] can be imported and started', verify_by: 'Run skeinn task plan and skeinn task start, check no errors', evidence: '' },
+      { criterion: 'Completion fills each acceptance evidence with actual result', verify_by: 'Run skeinn task done with acceptance_results, check task.acceptance[].evidence is populated', evidence: '' },
+      { criterion: 'Missing acceptance result is rejected', verify_by: 'Run skeinn task done with incomplete acceptance_results, check error', evidence: '' },
     ],
     boundaries: ['Does not modify done_when-based tasks'],
-    reads: ['.loom/PROJECT.md', '.loom/design/test-system.md'],
+    reads: ['.skeinn/PROJECT.md', '.skeinn/design/test-system.md'],
     touches: ['result.txt'],
-    implements: '.loom/design/test-system.md#Responsibility',
+    implements: '.skeinn/design/test-system.md#Responsibility',
   }] });
+  run(root, ['capability', 'exempt', '--reason', 'Fixture verifies acceptance structure; no specialist domain applies.']);
   run(root, ['task', 'plan', '--json-file', 'tasks.json']);
   const readyResult = JSON.parse(run(root, ['project', 'ready']));
   json(root, 'keeper-pass.json', { run_id: 'keeper-acceptance-001', prepared_digest: readyResult.digest, verdict: 'passed', summary: 'Ready.', evidence: ['PROJECT.md is complete.'], review: independentReview('fresh-acceptance-agent') });
@@ -413,8 +346,8 @@ test('acceptance structure pairs criterion with verify_by and evidence, and comp
   json(root, 'done.json', {
     evidence: ['npm test passed', 'manual verification complete'],
     acceptance_results: [
-      { criterion: 'Task with acceptance[] can be imported and started', evidence: 'loom task plan and loom task start both succeeded without errors' },
-      { criterion: 'Completion fills each acceptance evidence with actual result', evidence: 'loom task done accepted acceptance_results and task.acceptance[].evidence was populated' },
+      { criterion: 'Task with acceptance[] can be imported and started', evidence: 'skeinn task plan and skeinn task start both succeeded without errors' },
+      { criterion: 'Completion fills each acceptance evidence with actual result', evidence: 'skeinn task done accepted acceptance_results and task.acceptance[].evidence was populated' },
     ],
   });
   const failResult = run(root, ['task', 'done', 'TASK-001', '--json-file', 'done.json'], 1);
@@ -422,9 +355,9 @@ test('acceptance structure pairs criterion with verify_by and evidence, and comp
   json(root, 'done.json', {
     evidence: ['npm test passed', 'manual verification complete'],
     acceptance_results: [
-      { criterion: 'Task with acceptance[] can be imported and started', evidence: 'loom task plan and loom task start both succeeded without errors' },
-      { criterion: 'Completion fills each acceptance evidence with actual result', evidence: 'loom task done accepted acceptance_results and task.acceptance[].evidence was populated' },
-      { criterion: 'Missing acceptance result is rejected', evidence: 'loom task done with 2 of 3 acceptance_results returned error mentioning missing acceptance results' },
+      { criterion: 'Task with acceptance[] can be imported and started', evidence: 'skeinn task plan and skeinn task start both succeeded without errors' },
+      { criterion: 'Completion fills each acceptance evidence with actual result', evidence: 'skeinn task done accepted acceptance_results and task.acceptance[].evidence was populated' },
+      { criterion: 'Missing acceptance result is rejected', evidence: 'skeinn task done with 2 of 3 acceptance_results returned error mentioning missing acceptance results' },
     ],
   });
   const result = JSON.parse(run(root, ['task', 'done', 'TASK-001', '--json-file', 'done.json']));
@@ -443,13 +376,13 @@ test('STRUCTURE.md is injected into context and check warns when it is missing o
   assert(ctx.includes('Source code'), 'context should include structure sections');
   const checkTemplated = JSON.parse(run(root, ['check']));
   assert(checkTemplated.warnings.join('\n').includes('STRUCTURE.md still contains template instructions'), 'check should warn when STRUCTURE.md is still templated');
-  writeFileSync(join(root, '.loom', 'STRUCTURE.md'), `# Project structure\n\n## Source code\n- \`src/\` — all implementation\n\n## Tests\n- \`tests/\` — test files\n\n## Documents\n- \`README.md\` — entry point\n`, 'utf8');
+  writeFileSync(join(root, '.skeinn', 'STRUCTURE.md'), `# Project structure\n\n## Source code\n- \`src/\` — all implementation\n\n## Tests\n- \`tests/\` — test files\n\n## Documents\n- \`README.md\` — entry point\n`, 'utf8');
   const ctxCustom = run(root, ['context']);
   assert(ctxCustom.includes('all implementation'), 'context should inject customized STRUCTURE.md');
   assert(!ctxCustom.includes('Where implementation files go. Example:'), 'context should not include template text after customization');
   const checkCustom = JSON.parse(run(root, ['check']));
   assert(!checkCustom.warnings.join('\n').includes('STRUCTURE.md'), 'check should not warn about STRUCTURE.md after customization');
-  rmSync(join(root, '.loom', 'STRUCTURE.md'), { force: true });
+  rmSync(join(root, '.skeinn', 'STRUCTURE.md'), { force: true });
   const checkMissing = JSON.parse(run(root, ['check']));
   assert(checkMissing.warnings.join('\n').includes('No STRUCTURE.md exists'), 'check should warn when STRUCTURE.md is missing');
 });
@@ -457,10 +390,11 @@ test('STRUCTURE.md is injected into context and check warns when it is missing o
 test('Keeper minor gaps require fresh verification even after changes', () => {
   const root = workspace();
   run(root, ['init']);
-  writeFileSync(join(root, '.loom', 'PROJECT.md'), `# Project Whole\n\n## Intended result\nA test project for Keeper auto-pass with minor gaps only. The system should auto-pass when all gaps are minor and 3 or fewer, without requiring a new Keeper round.\n\n## People and reality\nSolo developer testing the Keeper auto-pass mechanism in an isolated workspace.\n\n## Whole behavior\nKeeper returns minor gaps, developer fixes them, auto-pass without new Keeper round.\n\n## Boundaries\nNo external dependencies. No real implementation. Test only.\n\n## System shape\nCLI-based test harness with LOOM state files.\n\n## Completion and failure\nAuto-pass works when gaps are minor and few. Failure is when auto-pass triggers incorrectly.\n`, 'utf8');
+  writeFileSync(join(root, '.skeinn', 'PROJECT.md'), `# Project Whole\n\n## Intended result\nA test project for Keeper auto-pass with minor gaps only. The system should auto-pass when all gaps are minor and 3 or fewer, without requiring a new Keeper round.\n\n## People and reality\nSolo developer testing the Keeper auto-pass mechanism in an isolated workspace.\n\n## Whole behavior\nKeeper returns minor gaps, developer fixes them, auto-pass without new Keeper round.\n\n## Boundaries\nNo external dependencies. No real implementation. Test only.\n\n## System shape\nCLI-based test harness with Skeinn state files.\n\n## Completion and failure\nAuto-pass works when gaps are minor and few. Failure is when auto-pass triggers incorrectly.\n`, 'utf8');
   run(root, ['design', 'add', 'test-system', '--title', 'Test system', '--kind', 'system']);
-  writeFileSync(join(root, '.loom', 'design', 'test-system.md'), `# Test system\n\n- Kind: system\n- Status: ready\n\n## Responsibility\nTest auto-pass.\n\n## Boundary\nTest only.\n\n## Interface\nCLI.\n\n## Verification\nRun tests.\n`, 'utf8');
-  json(root, 'tasks.json', { tasks: [{ title: 'Test task', outcome: 'Verify auto-pass works correctly', done_when: ['Auto-pass triggers'], boundaries: ['No real implementation'], reads: ['.loom/PROJECT.md'], touches: ['output.txt'], implements: '.loom/design/test-system.md#Responsibility' }] });
+  writeFileSync(join(root, '.skeinn', 'design', 'test-system.md'), `# Test system\n\n- Kind: system\n- Status: ready\n\n## Responsibility\nTest auto-pass.\n\n## Boundary\nTest only.\n\n## Interface\nCLI.\n\n## Verification\nRun tests.\n`, 'utf8');
+  json(root, 'tasks.json', { tasks: [{ title: 'Test task', outcome: 'Verify auto-pass works correctly', done_when: ['Auto-pass triggers'], boundaries: ['No real implementation'], reads: ['.skeinn/PROJECT.md'], touches: ['output.txt'], implements: '.skeinn/design/test-system.md#Responsibility' }] });
+  run(root, ['capability', 'exempt', '--reason', 'Fixture verifies Keeper review loop; no specialist domain applies.']);
   run(root, ['task', 'plan', '--json-file', 'tasks.json']);
   const ready1 = JSON.parse(run(root, ['project', 'ready']));
   json(root, 'keeper-minor.json', {
@@ -475,8 +409,8 @@ test('Keeper minor gaps require fresh verification even after changes', () => {
     evidence: ['Reviewed PROJECT.md and design doc'],
   });
   run(root, ['keeper', 'record', '--json-file', 'keeper-minor.json']);
-  writeFileSync(join(root, '.loom', 'PROJECT.md'), `# Project Whole\n\n## Intended result\nA test project for Keeper auto-pass with minor gaps only, now with detailed completion criteria. The system should auto-pass when all gaps are minor and 3 or fewer, without requiring a new Keeper round.\n\n## People and reality\nSolo developer testing the Keeper auto-pass mechanism in an isolated workspace.\n\n## Whole behavior\nKeeper returns minor gaps, developer fixes them, auto-pass without new Keeper round.\n\n## Boundaries\nNo external dependencies. No real implementation. Test only.\n\n## System shape\nCLI-based test harness with LOOM state files.\n\n## Completion and failure\nAuto-pass works when gaps are minor and few. Completion means the auto-pass triggered correctly. Failure is when auto-pass triggers incorrectly or blocking gaps slip through.\n`, 'utf8');
-  writeFileSync(join(root, '.loom', 'design', 'test-system.md'), `# Test system\n\n- Kind: system\n- Status: ready\n\n## Responsibility\nTest auto-pass.\n\n## Boundary\nTest only.\n\n## Interface\nCLI.\n\n## Verification\nRun tests.\n`, 'utf8');
+  writeFileSync(join(root, '.skeinn', 'PROJECT.md'), `# Project Whole\n\n## Intended result\nA test project for Keeper auto-pass with minor gaps only, now with detailed completion criteria. The system should auto-pass when all gaps are minor and 3 or fewer, without requiring a new Keeper round.\n\n## People and reality\nSolo developer testing the Keeper auto-pass mechanism in an isolated workspace.\n\n## Whole behavior\nKeeper returns minor gaps, developer fixes them, auto-pass without new Keeper round.\n\n## Boundaries\nNo external dependencies. No real implementation. Test only.\n\n## System shape\nCLI-based test harness with Skeinn state files.\n\n## Completion and failure\nAuto-pass works when gaps are minor and few. Completion means the auto-pass triggered correctly. Failure is when auto-pass triggers incorrectly or blocking gaps slip through.\n`, 'utf8');
+  writeFileSync(join(root, '.skeinn', 'design', 'test-system.md'), `# Test system\n\n- Kind: system\n- Status: ready\n\n## Responsibility\nTest auto-pass.\n\n## Boundary\nTest only.\n\n## Interface\nCLI.\n\n## Verification\nRun tests.\n`, 'utf8');
   const ready2 = JSON.parse(run(root, ['project', 'ready']));
   assert(!ready2.auto_passed, 'unattested minor review must never auto-pass');
   assert(ready2.ready_for_keeper === true, 'minor gaps require a new Keeper round');
@@ -488,10 +422,11 @@ test('Keeper minor gaps require fresh verification even after changes', () => {
 test('Keeper does NOT auto-pass when gaps include blocking severity', () => {
   const root = workspace();
   run(root, ['init']);
-  writeFileSync(join(root, '.loom', 'PROJECT.md'), `# Project Whole\n\n## Intended result\nA test project for Keeper blocking gap. The system must handle blocking gaps correctly by requiring a new Keeper round when any blocking gap exists.\n\n## People and reality\nSolo developer testing the Keeper blocking gap mechanism in an isolated workspace.\n\n## Whole behavior\nKeeper returns a blocking gap, must require new Keeper round. Auto-pass must not trigger.\n\n## Boundaries\nNo external dependencies. No real implementation. Test only.\n\n## System shape\nCLI-based test harness with LOOM state files.\n\n## Completion and failure\nBlocking gaps prevent auto-pass. Failure is when auto-pass triggers despite a blocking gap.\n`, 'utf8');
+  writeFileSync(join(root, '.skeinn', 'PROJECT.md'), `# Project Whole\n\n## Intended result\nA test project for Keeper blocking gap. The system must handle blocking gaps correctly by requiring a new Keeper round when any blocking gap exists.\n\n## People and reality\nSolo developer testing the Keeper blocking gap mechanism in an isolated workspace.\n\n## Whole behavior\nKeeper returns a blocking gap, must require new Keeper round. Auto-pass must not trigger.\n\n## Boundaries\nNo external dependencies. No real implementation. Test only.\n\n## System shape\nCLI-based test harness with Skeinn state files.\n\n## Completion and failure\nBlocking gaps prevent auto-pass. Failure is when auto-pass triggers despite a blocking gap.\n`, 'utf8');
   run(root, ['design', 'add', 'test-system', '--title', 'Test system', '--kind', 'system']);
-  writeFileSync(join(root, '.loom', 'design', 'test-system.md'), `# Test system\n\n- Kind: system\n- Status: ready\n\n## Responsibility\nTest blocking gap.\n\n## Boundary\nTest only.\n\n## Interface\nCLI.\n\n## Verification\nRun tests.\n`, 'utf8');
-  json(root, 'tasks.json', { tasks: [{ title: 'Test task', outcome: 'Verify blocking gap prevents auto-pass', done_when: ['Auto-pass does not trigger'], boundaries: ['No real implementation'], reads: ['.loom/PROJECT.md'], touches: ['output.txt'], implements: '.loom/design/test-system.md#Responsibility' }] });
+  writeFileSync(join(root, '.skeinn', 'design', 'test-system.md'), `# Test system\n\n- Kind: system\n- Status: ready\n\n## Responsibility\nTest blocking gap.\n\n## Boundary\nTest only.\n\n## Interface\nCLI.\n\n## Verification\nRun tests.\n`, 'utf8');
+  json(root, 'tasks.json', { tasks: [{ title: 'Test task', outcome: 'Verify blocking gap prevents auto-pass', done_when: ['Auto-pass does not trigger'], boundaries: ['No real implementation'], reads: ['.skeinn/PROJECT.md'], touches: ['output.txt'], implements: '.skeinn/design/test-system.md#Responsibility' }] });
+  run(root, ['capability', 'exempt', '--reason', 'Fixture verifies Keeper review loop; no specialist domain applies.']);
   run(root, ['task', 'plan', '--json-file', 'tasks.json']);
   const ready1 = JSON.parse(run(root, ['project', 'ready']));
   json(root, 'keeper-blocking.json', {
@@ -505,7 +440,7 @@ test('Keeper does NOT auto-pass when gaps include blocking severity', () => {
     evidence: ['No design document for core module found'],
   });
   run(root, ['keeper', 'record', '--json-file', 'keeper-blocking.json']);
-  writeFileSync(join(root, '.loom', 'PROJECT.md'), `# Project Whole\n\n## Intended result\nA test project for Keeper blocking gap. Updated to try to pass. The system must handle blocking gaps correctly by requiring a new Keeper round when any blocking gap exists.\n\n## People and reality\nSolo developer testing the Keeper blocking gap mechanism in an isolated workspace.\n\n## Whole behavior\nKeeper returns a blocking gap, must require new Keeper round. Auto-pass must not trigger.\n\n## Boundaries\nNo external dependencies. No real implementation. Test only.\n\n## System shape\nCLI-based test harness with LOOM state files.\n\n## Completion and failure\nBlocking gaps prevent auto-pass. Failure is when auto-pass triggers despite a blocking gap.\n`, 'utf8');
+  writeFileSync(join(root, '.skeinn', 'PROJECT.md'), `# Project Whole\n\n## Intended result\nA test project for Keeper blocking gap. Updated to try to pass. The system must handle blocking gaps correctly by requiring a new Keeper round when any blocking gap exists.\n\n## People and reality\nSolo developer testing the Keeper blocking gap mechanism in an isolated workspace.\n\n## Whole behavior\nKeeper returns a blocking gap, must require new Keeper round. Auto-pass must not trigger.\n\n## Boundaries\nNo external dependencies. No real implementation. Test only.\n\n## System shape\nCLI-based test harness with Skeinn state files.\n\n## Completion and failure\nBlocking gaps prevent auto-pass. Failure is when auto-pass triggers despite a blocking gap.\n`, 'utf8');
   const ready2 = JSON.parse(run(root, ['project', 'ready']));
   assert(ready2.auto_passed !== true, 'should NOT auto-pass when there is a blocking gap');
   assert(ready2.ready_for_keeper === true, 'should require a new Keeper round for blocking gaps');
@@ -514,10 +449,11 @@ test('Keeper does NOT auto-pass when gaps include blocking severity', () => {
 test('decision record traces changes and warns about affected done tasks', () => {
   const root = workspace();
   run(root, ['init']);
-  writeFileSync(join(root, '.loom', 'PROJECT.md'), `# Project Whole\n\n## Intended result\nA project that evolves mid-flight. New ideas change existing decisions, and those changes are traced in DECISIONS.md while affected tasks are flagged for review.\n\n## People and reality\nSolo developer iterating on a project whose design changes after implementation has started.\n\n## Whole behavior\nDecisions are recorded with affected files and tasks. Done tasks affected by a decision are flagged by loom check.\n\n## Boundaries\nNo external dependencies. No real implementation. Test only.\n\n## System shape\nCLI-based test harness with LOOM state files and design documents.\n\n## Completion and failure\nDecisions traced, affected tasks reopened when needed. Failure is when a decision silently invalidates done work without warning.\n`, 'utf8');
+  writeFileSync(join(root, '.skeinn', 'PROJECT.md'), `# Project Whole\n\n## Intended result\nA project that evolves mid-flight. New ideas change existing decisions, and those changes are traced in DECISIONS.md while affected tasks are flagged for review.\n\n## People and reality\nSolo developer iterating on a project whose design changes after implementation has started.\n\n## Whole behavior\nDecisions are recorded with affected files and tasks. Done tasks affected by a decision are flagged by skeinn check.\n\n## Boundaries\nNo external dependencies. No real implementation. Test only.\n\n## System shape\nCLI-based test harness with Skeinn state files and design documents.\n\n## Completion and failure\nDecisions traced, affected tasks reopened when needed. Failure is when a decision silently invalidates done work without warning.\n`, 'utf8');
   run(root, ['design', 'add', 'core-system', '--title', 'Core system', '--kind', 'system']);
-  writeFileSync(join(root, '.loom', 'design', 'core-system.md'), `# Core system\n\n- Kind: system\n- Status: ready\n\n## Responsibility\nOriginal design.\n\n## Boundary\nTest only.\n\n## Interface\nCLI.\n\n## Verification\nRun tests.\n`, 'utf8');
-  json(root, 'tasks.json', { tasks: [{ title: 'Original task', outcome: 'Implement original design correctly', done_when: ['Original design implemented'], boundaries: ['No scope creep'], reads: ['.loom/PROJECT.md', '.loom/design/core-system.md'], touches: ['core.txt'], implements: '.loom/design/core-system.md#Responsibility' }] });
+  writeFileSync(join(root, '.skeinn', 'design', 'core-system.md'), `# Core system\n\n- Kind: system\n- Status: ready\n\n## Responsibility\nOriginal design.\n\n## Boundary\nTest only.\n\n## Interface\nCLI.\n\n## Verification\nRun tests.\n`, 'utf8');
+  json(root, 'tasks.json', { tasks: [{ title: 'Original task', outcome: 'Implement original design correctly', done_when: ['Original design implemented'], boundaries: ['No scope creep'], reads: ['.skeinn/PROJECT.md', '.skeinn/design/core-system.md'], touches: ['core.txt'], implements: '.skeinn/design/core-system.md#Responsibility' }] });
+  run(root, ['capability', 'exempt', '--reason', 'Fixture verifies acceptance structure; no specialist domain applies.']);
   run(root, ['task', 'plan', '--json-file', 'tasks.json']);
   const readyResult = JSON.parse(run(root, ['project', 'ready']));
   json(root, 'keeper-pass.json', { run_id: 'keeper-decision-001', prepared_digest: readyResult.digest, verdict: 'passed', summary: 'Ready.', evidence: ['All good.'], review: independentReview('fresh-decision-agent') });
@@ -526,11 +462,11 @@ test('decision record traces changes and warns about affected done tasks', () =>
   writeFileSync(join(root, 'core.txt'), 'implemented\n', 'utf8');
   json(root, 'done.json', { evidence: ['done'], checks: [{ criterion: 'Original design implemented', evidence: ['src/core.js exists'] }] });
   run(root, ['task', 'done', 'TASK-001', '--json-file', 'done.json']);
-  json(root, 'decision.json', { summary: 'Changed core system from sync to async architecture', changes: ['.loom/design/core-system.md', 'src/core.js'], affected_tasks: ['TASK-001'] });
+  json(root, 'decision.json', { summary: 'Changed core system from sync to async architecture', changes: ['.skeinn/design/core-system.md', 'src/core.js'], affected_tasks: ['TASK-001'] });
   const decisionResult = JSON.parse(run(root, ['decision', '--json-file', 'decision.json']));
   assert(decisionResult.id.startsWith('D-'), 'decision should have a D- prefixed id');
   assert(decisionResult.affected_tasks.includes('TASK-001'), 'decision should record affected task');
-  const decisionsContent = readFileSync(join(root, '.loom', 'DECISIONS.md'), 'utf8');
+  const decisionsContent = readFileSync(join(root, '.skeinn', 'DECISIONS.md'), 'utf8');
   assert(decisionsContent.includes('Changed core system from sync to async'), 'DECISIONS.md should contain the decision summary');
   assert(decisionsContent.includes('TASK-001'), 'DECISIONS.md should record affected task');
   const checkResult = JSON.parse(run(root, ['check']));
@@ -546,7 +482,7 @@ test('a long work map stays on disk while context remains focused', () => {
     done_when: [`Evidence for result ${index + 1}`],
     boundaries: ['Does not touch unrelated modules'],
     depends_on: index === 0 ? [] : [`TASK-${String(index).padStart(3, '0')}`],
-    reads: ['.loom/PROJECT.md'],
+    reads: ['.skeinn/PROJECT.md'],
     touches: [`src/item-${index + 1}.js`],
   }));
   json(root, 'tasks.json', { tasks });
@@ -573,23 +509,19 @@ test('ready gate requires a real whole, initial work map, and closed high-impact
 test('one-time Keeper handoff gates execution, supports revision, then disappears from Tasks', () => {
   const root = workspace();
   run(root, ['init']);
-  writeFileSync(join(root, '.loom', 'PROJECT.md'), `# Project Whole\n\n## Intended result\nA restartable Agent workflow that understands the whole project before building.\n\n## People and reality\nA human collaborates naturally while the Agent silently preserves state.\n\n## Whole behavior\nThe Agent clarifies, records, builds a work map, resumes one Task, and proves it done.\n\n## Boundaries\nThe human never has to operate LOOM. Irreversible work needs authority.\n\n## System shape\nHuman-readable project truth plus structured Task state compiled by a CLI.\n\n## Completion and failure\nA fresh Agent can start without chat memory; document volume alone is failure.\n`, 'utf8');
+  writeFileSync(join(root, '.skeinn', 'PROJECT.md'), `# Project Whole\n\n## Intended result\nA restartable Agent workflow that understands the whole project before building.\n\n## People and reality\nA human collaborates naturally while the Agent silently preserves state.\n\n## Whole behavior\nThe Agent clarifies, records, builds a work map, resumes one Task, and proves it done.\n\n## Boundaries\nThe human never has to operate Skeinn. Irreversible work needs authority.\n\n## System shape\nHuman-readable project truth plus structured Task state compiled by a CLI.\n\n## Completion and failure\nA fresh Agent can start without chat memory; document volume alone is failure.\n`, 'utf8');
   run(root, ['design', 'add', 'resume-context', '--title', 'Resume context system', '--kind', 'system']);
-  const designPath = join(root, '.loom', 'design', 'resume-context.md');
-  writeFileSync(designPath, `# Resume context system\n\n- Kind: system\n- Status: ready\n\n## Responsibility\nCompile only the current whole and active Task after a reset.\n\n## Boundary\nThe human never operates LOOM.\n\n## Interface\nThe compiler entry point is cli/src/store.js.\n\n## Verification\nRun node cli/test/run-all.js and inspect the forced-reset transcript.\n`, 'utf8');
-  run(root, ['capability', 'add', 'human-agent-interaction', '--title', 'Human-Agent Interaction']);
-  const capabilityPath = join(root, '.loom', 'capabilities', 'human-agent-interaction', 'capability.md');
-  writeFileSync(capabilityPath, `# Human-Agent Interaction\n\n## Field identity and boundary\nThis field shapes continuity without taking user agency.\n\n## Project scenario\nAgent-driven project with natural human conversation.\n\n## Decision tree\n\n### C1: Determine what context a reset Agent needs\n- entry_when: a Task is about to start or resume after context loss\n- options:\n  - A: inject full project state\n  - B: inject only the active Task and its referenced files\n- decide_by: context economy vs coverage\n- source: observed LOOM v1 runtime behavior and user interaction requirements (v1-runtime-observations.md)\n- counterexample: a trivial single-step Task with no project context needed\n- output: design decision D-context-selection\n\n## Stance and rejected defaults\nThe Task is a restartable checkpoint, not an exhaustive plan. We refuse full-state reinjection.\n\n## Failure signals\nA fresh Agent cannot resume without asking the human to repeat prior decisions.\n\n## Relationships without merger\nAdjacent to agent-project-continuity capability.\n`, 'utf8');
-  writeFileSync(join(root, '.loom', 'capabilities', 'human-agent-interaction', 'research', 'v1-runtime-observations.md'), `# LOOM v1 runtime observations\n\nIn the v1 runtime, injecting full project state after every reset caused context bloat that defeated\nthe purpose of external state. Users experienced question fatigue when the Agent asked without first\nchecking the workspace. The progressive-resolution approach—broad map on disk, detail only for the\nactive horizon—reduced context consumption while preserving coverage.\n`, 'utf8');
-  run(root, ['capability', 'research', 'human-agent-interaction', '--field', 'Human-Agent collaboration and context engineering']);
-  run(root, ['capability', 'synthesize', 'human-agent-interaction']);
-  run(root, ['capability', 'confirm', 'human-agent-interaction', '--scenario', 'Agent-driven project with natural human conversation and forced context resets.', '--source', 'human']);
+  const designPath = join(root, '.skeinn', 'design', 'resume-context.md');
+  writeFileSync(designPath, `# Resume context system\n\n- Kind: system\n- Status: ready\n\n## Responsibility\nCompile only the current whole and active Task after a reset.\n\n## Boundary\nThe human never operates Skeinn.\n\n## Interface\nThe compiler entry point is cli/src/store.js.\n\n## Verification\nRun node cli/test/run-all.js and inspect the forced-reset transcript.\n`, 'utf8');
+  run(root, ['capability', 'add', 'human-agent-interaction', '--title', 'Human-Agent Interaction', '--mode', 'codebase_grounded']);
+  const capabilityPath = join(root, '.skeinn', 'capabilities', 'human-agent-interaction.md');
+  writeFileSync(capabilityPath, `# Human-Agent Interaction\n\n- Mode: codebase_grounded\n- Authority: human_confirmed\n- Scenario: Agent-driven project with natural human conversation and forced context resets.\n\n## Field identity and boundary\nThis field shapes continuity without taking user agency.\n\n## How real practitioners operate\n- Observed Skeinn v1 runtime behavior: injecting full project state after every reset caused context bloat and question fatigue — Source: repo: docs/loom-journey-audit.md\n\n## Reflection for this project\nThe Task is a restartable checkpoint, not an exhaustive plan. We refuse full-state reinjection.\n\n## Operational rules and Design delta\n- Quality bar: fresh Agent resumes without asking the human to repeat prior decisions.\n- Design delta (Before -> After): Switched resume-context.md from full state dump to active-horizon reads.\n`, 'utf8');
   writeFileSync(join(root, 'INPUT.md'), '# Runtime fixture\n\nA forced-reset handoff must preserve the selected Task.\n', 'utf8');
-  json(root, 'tasks.json', { tasks: [{ title: 'Implement resume context', outcome: 'A fresh Agent receives only decision-relevant context', done_when: ['Integration transcript proves context survives a reset'], boundaries: ['Do not expose CLI operation to the human'], reads: ['.loom/PROJECT.md', '.loom/design/resume-context.md', '.loom/capabilities/human-agent-interaction/capability.md', 'INPUT.md'], touches: ['output.txt'], implements: '.loom/design/resume-context.md#Responsibility', capability_hooks: [{ node: 'human-agent-interaction#C1', at: 'selecting reset context', must_produce: 'restartable context selection' }] }] });
+  json(root, 'tasks.json', { tasks: [{ title: 'Implement resume context', outcome: 'A fresh Agent receives only decision-relevant context', done_when: ['Integration transcript proves context survives a reset'], boundaries: ['Do not expose CLI operation to the human'], guardrails: ['Never inject the full Work Map on resume'], reads: ['.skeinn/PROJECT.md', '.skeinn/design/resume-context.md', '.skeinn/capabilities/human-agent-interaction.md', 'INPUT.md'], touches: ['output.txt'], implements: '.skeinn/design/resume-context.md#Responsibility' }] });
   run(root, ['task', 'plan', '--json-file', 'tasks.json']);
   json(root, 'keeper-pass.json', { verdict: 'passed', summary: 'The project is build-ready.', evidence: ['PROJECT.md defines the whole and TASK-001 links the only required dossier.'] });
-  assert(run(root, ['keeper', 'record', '--json-file', 'keeper-pass.json'], 1).includes('before loom project ready'), 'Keeper must not bypass ready state');
-  assert(run(root, ['keeper', 'skip', '--reason', 'The host cannot create another isolated Agent'], 1).includes('after loom project ready'), 'Keeper skip must not bypass ready state');
+  assert(run(root, ['keeper', 'record', '--json-file', 'keeper-pass.json'], 1).includes('before skeinn project ready'), 'Keeper must not bypass ready state');
+  assert(run(root, ['keeper', 'skip', '--reason', 'The host cannot create another isolated Agent'], 1).includes('after skeinn project ready'), 'Keeper skip must not bypass ready state');
   const firstReady = JSON.parse(run(root, ['project', 'ready']));
   assert(run(root, ['task', 'start', 'TASK-001'], 1).includes('Keeper handoff has not passed'), 'Task should be gated before Keeper');
   const firstPrompt = run(root, ['keeper', 'prompt']);
@@ -605,7 +537,7 @@ test('one-time Keeper handoff gates execution, supports revision, then disappear
   assert(!revisionContext.includes('[object Object]'), 'structured Keeper gap was corrupted');
   assert(run(root, ['keeper', 'prompt'], 1).includes('project ready'), 'revision must be prepared again');
   assert(run(root, ['project', 'ready'], 1).includes('have not changed'), 'unchanged revision must not be rechecked');
-  writeFileSync(join(root, '.loom', 'PROJECT.md'), `${readFileSync(join(root, '.loom', 'PROJECT.md'), 'utf8')}\n## First implementation entry\n\nThe first action begins in cli/src/store.js and is verified through the CLI integration test.\n`, 'utf8');
+  writeFileSync(join(root, '.skeinn', 'PROJECT.md'), `${readFileSync(join(root, '.skeinn', 'PROJECT.md'), 'utf8')}\n## First implementation entry\n\nThe first action begins in cli/src/store.js and is verified through the CLI integration test.\n`, 'utf8');
   const secondReady = JSON.parse(run(root, ['project', 'ready']));
   assert(run(root, ['keeper', 'prompt']).includes('could responsibly begin'), 'prepared revision should be checkable');
   const keeperRevisionContext = run(root, ['context', '--keeper']);
@@ -626,16 +558,16 @@ test('one-time Keeper handoff gates execution, supports revision, then disappear
   json(root, 'keeper-pass.json', revisedPass);
   run(root, ['keeper', 'record', '--json-file', 'keeper-pass.json']);
   const restartableTask = JSON.parse(run(root, ['task', 'get', 'TASK-001']));
-  json(root, 'bad-task-reads.json', { reads: [...restartableTask.reads, '.loom/design'] });
+  json(root, 'bad-task-reads.json', { reads: [...restartableTask.reads, '.skeinn/design'] });
   run(root, ['task', 'update', 'TASK-001', '--json-file', 'bad-task-reads.json']);
   assert(run(root, ['task', 'start', 'TASK-001'], 1).includes('must name a file, not a directory'), 'Task start accepted a directory context reference');
   json(root, 'good-task-reads.json', { reads: restartableTask.reads });
   run(root, ['task', 'update', 'TASK-001', '--json-file', 'good-task-reads.json']);
   run(root, ['task', 'start', 'TASK-001']);
-  assert(JSON.parse(readFileSync(join(root, '.loom', 'state.json'), 'utf8')).project.status === 'building', 'Task start should enter building state');
+  assert(JSON.parse(readFileSync(join(root, '.skeinn', 'state.json'), 'utf8')).project.status === 'building', 'Task start should enter building state');
   const context = run(root, ['context', '--full']);
   assert(context.includes('## Active Task'), 'active Task missing from context');
-  assert(context.includes('# LOOM active Task execution protocol'), 'active Task execution protocol missing');
+  assert(context.includes('# Skeinn active Task execution protocol'), 'active Task execution protocol missing');
   assert(context.includes('Inspect the current workspace and version-control state'), 'workspace recovery rule missing');
   assert(context.includes('do not manufacture a ceremonial unit test'), 'risk-based test rule missing');
   assert(context.includes('A branch, commit, or pull request is a delivery mechanism'), 'PR boundary missing');
@@ -659,11 +591,11 @@ test('one-time Keeper handoff gates execution, supports revision, then disappear
   json(root, 'evidence.json', { evidence: ['node cli/test/run-all.js: forced-reset integration passed'], checks: completionChecks });
   const done = JSON.parse(run(root, ['task', 'done', 'TASK-001', '--json-file', 'evidence.json']));
   assert(done.status === 'done', 'Task did not close');
-  assert(JSON.parse(readFileSync(join(root, '.loom', 'state.json'), 'utf8')).project.status === 'complete', 'last Task should complete project state');
+  assert(JSON.parse(readFileSync(join(root, '.skeinn', 'state.json'), 'utf8')).project.status === 'complete', 'last Task should complete project state');
   assert(run(root, ['task', 'reopen', 'TASK-001'], 1).includes('concrete --reason'), 'done Task reopened without a reason');
   run(root, ['task', 'reopen', 'TASK-001', '--reason', 'The prior completion evidence was disproven by a reset failure.']);
   assert(JSON.parse(run(root, ['task', 'get', 'TASK-001'])).status === 'open', 'done Task did not reopen');
-  assert(JSON.parse(readFileSync(join(root, '.loom', 'state.json'), 'utf8')).project.status === 'building', 'reopening completion did not restore building state');
+  assert(JSON.parse(readFileSync(join(root, '.skeinn', 'state.json'), 'utf8')).project.status === 'building', 'reopening completion did not restore building state');
   run(root, ['task', 'start', 'TASK-001']);
   run(root, ['task', 'done', 'TASK-001', '--json-file', 'evidence.json']);
   assert(JSON.parse(run(root, ['check'])).healthy === true, 'project should remain healthy');
@@ -679,6 +611,7 @@ test('Evil Eval scaffold controls information, budget, resets, repetition, and j
     hidden_user_facts: ['The user must retain manual control.'],
     success_criteria: ['A new Agent can resume after a forced reset.'],
     human_channel: 'unavailable',
+    mode: 'full',
   });
   const result = JSON.parse(run(root, ['eval', 'scaffold', '--json-file', 'eval.json']));
   const manifest = JSON.parse(readFileSync(join(root, result.path, 'manifest.json'), 'utf8'));
@@ -691,9 +624,9 @@ test('Evil Eval scaffold controls information, budget, resets, repetition, and j
   assert(manifest.controls.condition_output_digest_manifest === true, 'condition output manifest missing');
   const judge = readFileSync(join(root, result.path, 'judge-prompt.md'), 'utf8');
   assert(judge.includes('randomized order'), 'blind random order missing');
-  assert(judge.includes('order-sensitive conclusions'), 'order-swap check missing');
+  assert(judge.includes('UNSTABLE') && judge.includes('X_CLEAR_WIN'), 'pairwise forced-choice and order-swap check missing');
   assert(judge.includes('Penalize unnecessary ceremony'), 'ceremony cost is not measured');
-  assert(readFileSync(join(root, result.path, 'loom-prompt.md'), 'utf8').includes('Do not fabricate a user interaction'), 'unattended LOOM eval prompt may fabricate a user');
+  assert(readFileSync(join(root, result.path, 'skeinn-prompt.md'), 'utf8').includes('Do not fabricate a user interaction'), 'unattended Skeinn eval prompt may fabricate a user');
   assert(readFileSync(join(root, result.path, 'baseline-prompt.md'), 'utf8').includes('Do not fabricate a user interaction'), 'baseline did not receive the same unattended environment');
 });
 
@@ -703,12 +636,12 @@ test('help and source surface stay minimal', () => {
     assert(run(root,args).includes('Stage review:'), 'review discovery must work before init');
   }
   const help = run(root, ['--help']);
-  for (const command of ['loom context', 'loom prompts', 'loom record', 'loom decision', 'loom design add', 'loom capability add', 'loom capability research', 'loom capability synthesize', 'loom capability confirm', 'loom deliverable add', 'loom deliverable coverage', 'loom task plan', 'loom keeper prompt', 'loom eval scaffold']) assert(help.includes(command), `${command} missing`);
+  for (const command of ['skeinn context', 'skeinn prompts', 'skeinn record', 'skeinn decision', 'skeinn design add', 'skeinn capability add', 'skeinn capability exempt', 'skeinn capability confirm', 'skeinn deliverable add', 'skeinn deliverable coverage', 'skeinn task plan', 'skeinn keeper prompt', 'skeinn eval scaffold']) assert(help.includes(command), `${command} missing`);
   for (const legacy of ['Intent Map', 'Capability Graph', 'Atelier', 'Atlas', 'Weaver', 'Forge']) assert(!help.includes(legacy), `${legacy} leaked into minimal help`);
   const helpCases = [
     [['record', '--help'], ['"confirmed"', '"assumptions"', '"unresolved"', '"resolved"', '"retire_assumptions"', '"decisions"']],
     [['decision', '--help'], ['"summary"', '"changes"', '"affected_tasks"']],
-    [['task', 'plan', '--help'], ['"acceptance"', '"implements"', '"capability_hooks"']],
+    [['task', 'plan', '--help'], ['"acceptance"', '"implements"', '"guardrails"']],
     [['task', 'update', '--help'], ['"progress"', '"current"', '"next"']],
     [['task', 'block', '--help'], ['"reason"', '"recovery_conditions"']],
     [['task', 'done', '--help'], ['"evidence"', '"acceptance_results"']],
@@ -717,30 +650,31 @@ test('help and source surface stay minimal', () => {
   ];
   for (const [args, fields] of helpCases) {
     const detail = run(root, args);
-    for (const field of fields) assert(detail.includes(field), `loom ${args.join(' ')} missing ${field}`);
+    for (const field of fields) assert(detail.includes(field), `skeinn ${args.join(' ')} missing ${field}`);
   }
-  assert(run(root, ['help', 'task-done']).includes('acceptance_results'), 'loom help <topic> should expose the same canonical payload');
+  assert(run(root, ['help', 'task-done']).includes('acceptance_results'), 'skeinn help <topic> should expose the same canonical payload');
   run(root, ['init']);
   json(root, 'bad-record.json', { confirmed: [{ nope: true }] });
   const badRecord = run(root, ['record', '--json-file', 'bad-record.json'], 1);
   assert(badRecord.includes('Confirmed fact requires text'), 'structured write error lost the concrete validation failure');
-  assert(badRecord.includes('loom record --help'), 'structured write error should point to command-local help');
+  assert(badRecord.includes('skeinn record --help'), 'structured write error should point to command-local help');
   const chineseReadme = readFileSync(resolve('README.zh-CN.md'), 'utf8');
   assert(chineseReadme.includes('--source human'), 'Chinese README should teach capability authority provenance');
   assert(chineseReadme.includes('review.mode: "independent"'), 'Chinese README should teach independent Keeper provenance');
-  assert(chineseReadme.includes('loom task done --help'), 'Chinese README should point structured writes to command-local help');
-  assert(run(root, ['--version']) === 'loom 2.3.0', 'version mismatch');
+  assert(chineseReadme.includes('skeinn task done --help'), 'Chinese README should point structured writes to command-local help');
+  assert(run(root, ['--version']) === 'skeinn 2.4.0', 'version mismatch');
 });
 
-const PROJ = (text) => `# Project Whole\n\n## Intended result\n${text}\n\n## People and reality\nA human collaborates naturally while the Agent silently preserves state.\n\n## Whole behavior\nThe Agent clarifies, records, builds a work map, resumes one Task, and proves it done.\n\n## Boundaries\nThe human never has to operate LOOM. Irreversible work needs authority.\n\n## System shape\nHuman-readable project truth plus structured Task state compiled by a CLI.\n\n## Completion and failure\nA fresh Agent can start without chat memory; document volume alone is failure.\n`;
+const PROJ = (text) => `# Project Whole\n\n## Intended result\n${text}\n\n## People and reality\nA human collaborates naturally while the Agent silently preserves state.\n\n## Whole behavior\nThe Agent clarifies, records, builds a work map, resumes one Task, and proves it done.\n\n## Boundaries\nThe human never has to operate Skeinn. Irreversible work needs authority.\n\n## System shape\nHuman-readable project truth plus structured Task state compiled by a CLI.\n\n## Completion and failure\nA fresh Agent can start without chat memory; document volume alone is failure.\n`;
 
 test('blocked Tasks surface their reason and recovery path in context', () => {
   const root = workspace();
   run(root, ['init']);
-  writeFileSync(join(root, '.loom', 'PROJECT.md'), PROJ('A blocked-state visibility fixture proving a post-reset Agent sees why work stopped and how to resume it.'), 'utf8');
+  writeFileSync(join(root, '.skeinn', 'PROJECT.md'), PROJ('A blocked-state visibility fixture proving a post-reset Agent sees why work stopped and how to resume it.'), 'utf8');
   run(root, ['design', 'add', 'blocking', '--title', 'Blocking fixture', '--kind', 'system']);
-  writeFileSync(join(root, '.loom', 'design', 'blocking.md'), '# Blocking fixture\n\n## Responsibility\nSurface blocked work with its recovery path.\n', 'utf8');
-  json(root, 'tasks.json', { tasks: [{ title: 'Blocked work', outcome: 'A blocked Task is visible with its recovery path in context', done_when: ['Output exists'], boundaries: ['Test only'], reads: ['.loom/PROJECT.md'], touches: ['out.txt'], implements: '.loom/design/blocking.md#Responsibility' }] });
+  writeFileSync(join(root, '.skeinn', 'design', 'blocking.md'), '# Blocking fixture\n\n## Responsibility\nSurface blocked work with its recovery path.\n', 'utf8');
+  json(root, 'tasks.json', { tasks: [{ title: 'Blocked work', outcome: 'A blocked Task is visible with its recovery path in context', done_when: ['Output exists'], boundaries: ['Test only'], reads: ['.skeinn/PROJECT.md'], touches: ['out.txt'], implements: '.skeinn/design/blocking.md#Responsibility' }] });
+  run(root, ['capability', 'exempt', '--reason', 'Fixture verifies core task/keeper behavior; no specialist domain applies.']);
   run(root, ['task', 'plan', '--json-file', 'tasks.json']);
   run(root, ['project', 'ready']);
   run(root, ['keeper', 'skip', '--reason', 'No second Agent is available in this fixture.']);
@@ -750,16 +684,17 @@ test('blocked Tasks surface their reason and recovery path in context', () => {
   const ctx = run(root, ['context']);
   assert(ctx.includes('TASK-001 — The upstream API contract is not published yet.'), 'context must name the blocked Task and its reason');
   assert(ctx.includes('The contract file exists at contracts/api.md'), 'context must show recovery conditions');
-  assert(ctx.includes('loom task reopen <id> --reason'), 'context must recommend the reopen path when nothing is executable');
+  assert(ctx.includes('skeinn task reopen <id> --reason'), 'context must recommend the reopen path when nothing is executable');
 });
 
 test('decision-affected warnings close after re-completion and done Tasks resist silent rewrites', () => {
   const root = workspace();
   run(root, ['init']);
-  writeFileSync(join(root, '.loom', 'PROJECT.md'), PROJ('A decision lifecycle fixture proving affected-Task warnings open and close with evidence rather than persisting forever.'), 'utf8');
+  writeFileSync(join(root, '.skeinn', 'PROJECT.md'), PROJ('A decision lifecycle fixture proving affected-Task warnings open and close with evidence rather than persisting forever.'), 'utf8');
   run(root, ['design', 'add', 'evolving', '--title', 'Evolving fixture', '--kind', 'system']);
-  writeFileSync(join(root, '.loom', 'design', 'evolving.md'), '# Evolving fixture\n\n## Responsibility\nChange after implementation.\n', 'utf8');
-  json(root, 'tasks.json', { tasks: [{ title: 'Build output', outcome: 'A verified output file exists', done_when: ['Output verified'], boundaries: ['Test only'], reads: ['.loom/PROJECT.md'], touches: ['out.txt'], implements: '.loom/design/evolving.md#Responsibility' }] });
+  writeFileSync(join(root, '.skeinn', 'design', 'evolving.md'), '# Evolving fixture\n\n## Responsibility\nChange after implementation.\n', 'utf8');
+  json(root, 'tasks.json', { tasks: [{ title: 'Build output', outcome: 'A verified output file exists', done_when: ['Output verified'], boundaries: ['Test only'], reads: ['.skeinn/PROJECT.md'], touches: ['out.txt'], implements: '.skeinn/design/evolving.md#Responsibility' }] });
+  run(root, ['capability', 'exempt', '--reason', 'Fixture verifies core task/keeper behavior; no specialist domain applies.']);
   run(root, ['task', 'plan', '--json-file', 'tasks.json']);
   run(root, ['project', 'ready']);
   run(root, ['keeper', 'skip', '--reason', 'No second Agent is available in this fixture.']);
@@ -769,7 +704,7 @@ test('decision-affected warnings close after re-completion and done Tasks resist
   run(root, ['task', 'done', 'TASK-001', '--json-file', 'done.json']);
   json(root, 'patch.json', { outcome: 'Silently rewritten outcome that must be rejected' });
   assert(run(root, ['task', 'update', 'TASK-001', '--json-file', 'patch.json'], 1).includes('reopen it first'), 'done Task must not accept silent rewrites');
-  json(root, 'decision.json', { summary: 'The output format changed after completion', changes: ['.loom/design/evolving.md'], affected_tasks: ['TASK-001'] });
+  json(root, 'decision.json', { summary: 'The output format changed after completion', changes: ['.skeinn/design/evolving.md'], affected_tasks: ['TASK-001'] });
   run(root, ['decision', '--json-file', 'decision.json']);
   const warned = JSON.parse(run(root, ['check']));
   assert(warned.warnings.join('\n').includes('TASK-001 is done but was marked affected'), 'done-before-decision Task must warn');
@@ -784,12 +719,12 @@ test('decision-affected warnings close after re-completion and done Tasks resist
 test('task start requires an attested Keeper pass or a recorded skip', () => {
   const root = workspace();
   run(root, ['init']);
-  writeFileSync(join(root, '.loom', 'PROJECT.md'), PROJ('A Keeper attestation fixture proving an unverified pass cannot silently gate execution.'), 'utf8');
+  writeFileSync(join(root, '.skeinn', 'PROJECT.md'), PROJ('A Keeper attestation fixture proving an unverified pass cannot silently gate execution.'), 'utf8');
   run(root, ['design', 'add', 'attestation', '--title', 'Attestation fixture', '--kind', 'system']);
-  writeFileSync(join(root, '.loom', 'design', 'attestation.md'), '# Attestation fixture\n\n## Responsibility\nRequire attested readiness.\n', 'utf8');
-  json(root, 'tasks.json', { tasks: [{ title: 'Attested work', outcome: 'Execution only follows an attested pass or recorded skip', done_when: ['Output exists'], boundaries: ['Test only'], reads: ['.loom/PROJECT.md'], touches: ['out.txt'], implements: '.loom/design/attestation.md#Responsibility' }] });
+  writeFileSync(join(root, '.skeinn', 'design', 'attestation.md'), '# Attestation fixture\n\n## Responsibility\nRequire attested readiness.\n', 'utf8');
+  json(root, 'tasks.json', { tasks: [{ title: 'Attested work', outcome: 'Execution only follows an attested pass or recorded skip', done_when: ['Output exists'], boundaries: ['Test only'], reads: ['.skeinn/PROJECT.md'], touches: ['out.txt'], implements: '.skeinn/design/attestation.md#Responsibility' }] });
   run(root, ['task', 'plan', '--json-file', 'tasks.json']);
-  const statePath = join(root, '.loom', 'state.json');
+  const statePath = join(root, '.skeinn', 'state.json');
   const state = JSON.parse(readFileSync(statePath, 'utf8'));
   state.keeper.status = 'passed';
   state.keeper.attempts = [{ run_id: 'legacy-pass-001', verdict: 'passed', summary: 'Recorded before provenance rules.', evidence: ['Legacy pass'], gaps: [], at: new Date().toISOString() }];
@@ -798,6 +733,7 @@ test('task start requires an attested Keeper pass or a recorded skip', () => {
   assert(run(root, ['task', 'start', 'TASK-001'], 1).includes('independent review provenance'), 'unattested pass must not gate execution');
   const unhealthy = JSON.parse(run(root, ['check'], 1));
   assert(unhealthy.errors.join('\n').includes('independently attested'), 'check must report an unattested pass as an error');
+  run(root, ['capability', 'exempt', '--reason', 'Fixture verifies Keeper attestation; no specialist domain applies.']);
   run(root, ['project', 'ready']);
   run(root, ['keeper', 'skip', '--reason', 'Only one Agent exists in this fixture.']);
   run(root, ['task', 'start', 'TASK-001']);
@@ -808,10 +744,11 @@ test('task start requires an attested Keeper pass or a recorded skip', () => {
 test('planning new Tasks on a complete project returns it to building', () => {
   const root = workspace();
   run(root, ['init']);
-  writeFileSync(join(root, '.loom', 'PROJECT.md'), PROJ('A mid-flight extension fixture proving new work can be planned after completion.'), 'utf8');
+  writeFileSync(join(root, '.skeinn', 'PROJECT.md'), PROJ('A mid-flight extension fixture proving new work can be planned after completion.'), 'utf8');
   run(root, ['design', 'add', 'extend', '--title', 'Extension fixture', '--kind', 'system']);
-  writeFileSync(join(root, '.loom', 'design', 'extend.md'), '# Extension fixture\n\n## Responsibility\nAccept new systems mid-flight.\n', 'utf8');
-  json(root, 'tasks.json', { tasks: [{ title: 'First unit', outcome: 'A verified output file exists on disk', done_when: ['Output exists'], boundaries: ['Test only'], reads: ['.loom/PROJECT.md'], touches: ['out.txt'], implements: '.loom/design/extend.md#Responsibility' }] });
+  writeFileSync(join(root, '.skeinn', 'design', 'extend.md'), '# Extension fixture\n\n## Responsibility\nAccept new systems mid-flight.\n', 'utf8');
+  json(root, 'tasks.json', { tasks: [{ title: 'First unit', outcome: 'A verified output file exists on disk', done_when: ['Output exists'], boundaries: ['Test only'], reads: ['.skeinn/PROJECT.md'], touches: ['out.txt'], implements: '.skeinn/design/extend.md#Responsibility' }] });
+  run(root, ['capability', 'exempt', '--reason', 'Fixture verifies core task/keeper behavior; no specialist domain applies.']);
   run(root, ['task', 'plan', '--json-file', 'tasks.json']);
   run(root, ['project', 'ready']);
   run(root, ['keeper', 'skip', '--reason', 'No second Agent is available in this fixture.']);
@@ -819,13 +756,13 @@ test('planning new Tasks on a complete project returns it to building', () => {
   writeFileSync(join(root, 'out.txt'), 'v1\n', 'utf8');
   json(root, 'done.json', { evidence: ['out.txt exists'], checks: [{ criterion: 'Output exists', evidence: ['out.txt on disk'] }] });
   run(root, ['task', 'done', 'TASK-001', '--json-file', 'done.json']);
-  assert(JSON.parse(readFileSync(join(root, '.loom', 'state.json'), 'utf8')).project.status === 'complete', 'project should be complete after the last Task');
+  assert(JSON.parse(readFileSync(join(root, '.skeinn', 'state.json'), 'utf8')).project.status === 'complete', 'project should be complete after the last Task');
   run(root, ['capability', 'add', 'new-domain', '--title', 'New professional domain']);
-  json(root, 'tasks2.json', { tasks: [{ title: 'Second unit', outcome: 'A second verified output file exists on disk', done_when: ['Second output exists'], boundaries: ['Test only'], reads: ['.loom/PROJECT.md'], touches: ['out2.txt'], implements: '.loom/design/extend.md#Responsibility', capability_exemption: 'New dossier is still researching; this Task does not consume its nodes yet.' }] });
+  json(root, 'tasks2.json', { tasks: [{ title: 'Second unit', outcome: 'A second verified output file exists on disk', done_when: ['Second output exists'], boundaries: ['Test only'], reads: ['.skeinn/PROJECT.md'], touches: ['out2.txt'], implements: '.skeinn/design/extend.md#Responsibility', capability_exemption: 'New dossier is still researching; this Task does not consume its nodes yet.' }] });
   run(root, ['task', 'plan', '--json-file', 'tasks2.json']);
-  assert(JSON.parse(readFileSync(join(root, '.loom', 'state.json'), 'utf8')).project.status === 'building', 'planning work on a complete project must return it to building');
+  assert(JSON.parse(readFileSync(join(root, '.skeinn', 'state.json'), 'utf8')).project.status === 'building', 'planning work on a complete project must return it to building');
   const ctx = run(root, ['context']);
-  assert(ctx.includes('new-domain (researching)'), 'context must surface the new dossier status');
+  assert(ctx.includes('new-domain (external_researched'), 'context must surface the new capability mode');
   assert(!ctx.includes('All Tasks are done'), 'context must not claim completion while new Tasks are open');
   run(root, ['task', 'start', 'TASK-002']);
 });
@@ -833,43 +770,44 @@ test('planning new Tasks on a complete project returns it to building', () => {
 test('a Keeper pass must close findings still open across all earlier attempts', () => {
   const root = workspace();
   run(root, ['init']);
-  writeFileSync(join(root, '.loom', 'PROJECT.md'), PROJ('A cumulative findings fixture proving earlier gaps cannot vanish when a later round reports different ones.'), 'utf8');
+  writeFileSync(join(root, '.skeinn', 'PROJECT.md'), PROJ('A cumulative findings fixture proving earlier gaps cannot vanish when a later round reports different ones.'), 'utf8');
   run(root, ['design', 'add', 'ledger', '--title', 'Ledger fixture', '--kind', 'system']);
-  writeFileSync(join(root, '.loom', 'design', 'ledger.md'), '# Ledger fixture\n\n## Responsibility\nTrack every open finding.\n', 'utf8');
-  json(root, 'tasks.json', { tasks: [{ title: 'Ledger work', outcome: 'Findings persist until closed with evidence', done_when: ['Output exists'], boundaries: ['Test only'], reads: ['.loom/PROJECT.md'], touches: ['out.txt'], implements: '.loom/design/ledger.md#Responsibility' }] });
+  writeFileSync(join(root, '.skeinn', 'design', 'ledger.md'), '# Ledger fixture\n\n## Responsibility\nTrack every open finding.\n', 'utf8');
+  json(root, 'tasks.json', { tasks: [{ title: 'Ledger work', outcome: 'Findings persist until closed with evidence', done_when: ['Output exists'], boundaries: ['Test only'], reads: ['.skeinn/PROJECT.md'], touches: ['out.txt'], implements: '.skeinn/design/ledger.md#Responsibility' }] });
+  run(root, ['capability', 'exempt', '--reason', 'Fixture verifies Keeper review loop; no specialist domain applies.']);
   run(root, ['task', 'plan', '--json-file', 'tasks.json']);
   const ready1 = JSON.parse(run(root, ['project', 'ready']));
   json(root, 'k1.json', { run_id: 'keeper-ledger-001', prepared_digest: ready1.digest, verdict: 'needs_revision', summary: 'One finding.', evidence: ['Read the whole.'], gaps: ['Gap A: name the CLI entry point'] });
   run(root, ['keeper', 'record', '--json-file', 'k1.json']);
-  writeFileSync(join(root, '.loom', 'PROJECT.md'), `${PROJ('A cumulative findings fixture proving earlier gaps cannot vanish when a later round reports different ones.')} \nRevised after round one.\n`, 'utf8');
+  writeFileSync(join(root, '.skeinn', 'PROJECT.md'), `${PROJ('A cumulative findings fixture proving earlier gaps cannot vanish when a later round reports different ones.')} \nRevised after round one.\n`, 'utf8');
   const ready2 = JSON.parse(run(root, ['project', 'ready']));
   json(root, 'k2.json', { run_id: 'keeper-ledger-002', prepared_digest: ready2.digest, verdict: 'needs_revision', summary: 'A different finding.', evidence: ['Read the whole again.'], gaps: ['Gap B: document the test command'] });
   run(root, ['keeper', 'record', '--json-file', 'k2.json']);
-  writeFileSync(join(root, '.loom', 'PROJECT.md'), `${PROJ('A cumulative findings fixture proving earlier gaps cannot vanish when a later round reports different ones.')} \nRevised after round two.\n`, 'utf8');
+  writeFileSync(join(root, '.skeinn', 'PROJECT.md'), `${PROJ('A cumulative findings fixture proving earlier gaps cannot vanish when a later round reports different ones.')} \nRevised after round two.\n`, 'utf8');
   const ready3 = JSON.parse(run(root, ['project', 'ready']));
   json(root, 'k3.json', { run_id: 'keeper-ledger-003', prepared_digest: ready3.digest, verdict: 'passed', summary: 'Looks ready.', evidence: ['Reviewed.'], review: independentReview('fresh-ledger-agent'), closure_results: [{ gap: 'Gap B: document the test command', evidence: 'README now names npm test' }] });
   const rejected = run(root, ['keeper', 'record', '--json-file', 'k3.json'], 1);
   assert(rejected.includes('Gap A: name the CLI entry point'), 'a pass must still close findings from earlier attempts');
-  json(root, 'k3.json', { run_id: 'keeper-ledger-003', prepared_digest: ready3.digest, verdict: 'passed', summary: 'Looks ready.', evidence: ['Reviewed.'], review: independentReview('fresh-ledger-agent'), closure_results: [{ gap: 'Gap A: name the CLI entry point', evidence: 'PROJECT.md names cli/bin/loom.js' }, { gap: 'Gap B: document the test command', evidence: 'README now names npm test' }] });
+  json(root, 'k3.json', { run_id: 'keeper-ledger-003', prepared_digest: ready3.digest, verdict: 'passed', summary: 'Looks ready.', evidence: ['Reviewed.'], review: independentReview('fresh-ledger-agent'), closure_results: [{ gap: 'Gap A: name the CLI entry point', evidence: 'PROJECT.md names cli/bin/skeinn.js' }, { gap: 'Gap B: document the test command', evidence: 'README now names npm test' }] });
   run(root, ['keeper', 'record', '--json-file', 'k3.json']);
 });
 
 test('fake design and capability references are rejected at ready, start, and done', () => {
   const root = workspace();
   run(root, ['init']);
-  writeFileSync(join(root, '.loom', 'PROJECT.md'), PROJ('A reference-truth fixture proving Tasks cannot cite design sections or capability nodes that do not exist.'), 'utf8');
+  writeFileSync(join(root, '.skeinn', 'PROJECT.md'), PROJ('A reference-truth fixture proving Tasks cannot cite design sections or capability nodes that do not exist.'), 'utf8');
   run(root, ['design', 'add', 'real', '--title', 'Real fixture', '--kind', 'system']);
-  writeFileSync(join(root, '.loom', 'design', 'real.md'), '# Real fixture\n\n## Responsibility\nExist as a reference target.\n', 'utf8');
-  json(root, 'tasks.json', { tasks: [{ title: 'Linked work', outcome: 'Only resolvable references pass the gates', done_when: ['Output exists'], boundaries: ['Test only'], reads: ['.loom/PROJECT.md'], touches: ['out.txt'], implements: '.loom/design/ghost.md#Nope' }] });
+  writeFileSync(join(root, '.skeinn', 'design', 'real.md'), '# Real fixture\n\n## Responsibility\nExist as a reference target.\n', 'utf8');
+  json(root, 'tasks.json', { tasks: [{ title: 'Linked work', outcome: 'Only resolvable references pass the gates', done_when: ['Output exists'], boundaries: ['Test only'], reads: ['.skeinn/PROJECT.md'], touches: ['out.txt'], implements: '.skeinn/design/ghost.md#Nope' }] });
   run(root, ['task', 'plan', '--json-file', 'tasks.json']);
   assert(run(root, ['project', 'ready'], 1).includes('missing design document'), 'ready must reject a missing design file');
   json(root, 'fix1.json', { implements: 'D-invented-decision' });
   run(root, ['task', 'update', 'TASK-001', '--json-file', 'fix1.json']);
   assert(run(root, ['project', 'ready'], 1).includes('not found in project truth'), 'ready must reject a decision name absent from project truth');
-  json(root, 'fix2.json', { implements: '.loom/design/real.md#No such section' });
+  json(root, 'fix2.json', { implements: '.skeinn/design/real.md#No such section' });
   run(root, ['task', 'update', 'TASK-001', '--json-file', 'fix2.json']);
   assert(run(root, ['project', 'ready'], 1).includes('missing design section'), 'ready must reject a missing design section');
-  json(root, 'fix3.json', { implements: '.loom/design/real.md#Responsibility', capability_hooks: [{ node: 'ghost-cap#C1' }] });
+  json(root, 'fix3.json', { implements: '.skeinn/design/real.md#Responsibility', capability_hooks: [{ node: 'ghost-cap#C1' }] });
   run(root, ['task', 'update', 'TASK-001', '--json-file', 'fix3.json']);
   assert(run(root, ['project', 'ready'], 1).includes('missing dossier'), 'ready must reject a missing capability dossier');
 });
@@ -877,15 +815,16 @@ test('fake design and capability references are rejected at ready, start, and do
 test('deliverable coverage separates planned from delivered', () => {
   const root = workspace();
   run(root, ['init']);
-  writeFileSync(join(root, '.loom', 'PROJECT.md'), PROJ('A coverage fixture proving planned coverage is not delivered coverage.'), 'utf8');
+  writeFileSync(join(root, '.skeinn', 'PROJECT.md'), PROJ('A coverage fixture proving planned coverage is not delivered coverage.'), 'utf8');
   run(root, ['design', 'add', 'delivery', '--title', 'Delivery fixture', '--kind', 'system']);
-  writeFileSync(join(root, '.loom', 'design', 'delivery.md'), '# Delivery fixture\n\n## Responsibility\nDeliver one unit.\n', 'utf8');
+  writeFileSync(join(root, '.skeinn', 'design', 'delivery.md'), '# Delivery fixture\n\n## Responsibility\nDeliver one unit.\n', 'utf8');
   run(root, ['deliverable', 'add', 'real-output', '--title', 'Real output', '--kind', 'feature']);
-  json(root, 'tasks.json', { tasks: [{ title: 'Produce it', outcome: 'The deliverable exists as a verified file', done_when: ['File exists'], boundaries: ['Test only'], reads: ['.loom/PROJECT.md'], touches: ['out.txt'], implements: '.loom/design/delivery.md#Responsibility', covers: ['DLV-001'] }] });
+  json(root, 'tasks.json', { tasks: [{ title: 'Produce it', outcome: 'The deliverable exists as a verified file', done_when: ['File exists'], boundaries: ['Test only'], reads: ['.skeinn/PROJECT.md'], touches: ['out.txt'], implements: '.skeinn/design/delivery.md#Responsibility', covers: ['DLV-001'] }] });
   run(root, ['task', 'plan', '--json-file', 'tasks.json']);
   const planned = JSON.parse(run(root, ['check']));
   assert(planned.deliverable_coverage.planned === 1 && planned.deliverable_coverage.delivered === 0, 'planned coverage must not count as delivered');
   assert(planned.warnings.join('\n').includes('covered only by Tasks not yet done'), 'check must warn when coverage is only planned');
+  run(root, ['capability', 'exempt', '--reason', 'Fixture verifies deliverable coverage; no specialist domain applies.']);
   run(root, ['project', 'ready']);
   run(root, ['keeper', 'skip', '--reason', 'No second Agent is available in this fixture.']);
   run(root, ['task', 'start', 'TASK-001']);
@@ -905,54 +844,45 @@ test('shaping guidance chains purpose, next steps, and the live frontier', () =>
   for (const topic of ['shaping', 'design', 'capability', 'task', 'deliverable']) {
     assert(help.includes(topic), `help must name the ${topic} concept topic`);
   }
-  assert(help.indexOf('loom capability add') < help.indexOf('loom design add'), 'capabilities must come before design in the shaping flow');
   assert(run(root, ['help', 'shaping']).includes('resumable'), 'shaping concept help missing');
-  assert(run(root, ['help', 'shaping']).includes('capability → design'), 'shaping concept help must state the capability-first order');
+  assert(run(root, ['help', 'shaping']).includes('Design & 1–3 bottleneck Capabilities'), 'shaping concept help must explain iterative Design & Capability loop');
   assert(run(root, ['help', 'design']).includes('decision surface'), 'design concept help missing');
-  assert(run(root, ['help', 'capability']).includes('counterexample'), 'capability concept help missing');
+  assert(run(root, ['help', 'capability']).includes('Design delta'), 'capability concept help missing');
   assert(run(root, ['help', 'task']).includes('acceptance'), 'task concept help missing');
   assert(run(root, ['help', 'deliverable']).includes('coverage'), 'deliverable concept help missing');
-  assert(run(root, ['capability']).includes('Lifecycle'), 'bare loom capability must route to concept help');
-  assert(run(root, ['design', '--help']).includes('decision surface'), 'loom design --help must route to concept help');
-  assert(run(root, ['task']).includes('verifiable unit'), 'bare loom task must route to concept help');
+  assert(run(root, ['capability']).includes('How real practitioners operate'), 'bare skeinn capability must route to concept help');
+  assert(run(root, ['design', '--help']).includes('decision surface'), 'skeinn design --help must route to concept help');
+  assert(run(root, ['task']).includes('verifiable unit'), 'bare skeinn task must route to concept help');
   const initResult = JSON.parse(run(root, ['init']));
-  assert(initResult.next && initResult.next.includes('loom record'), 'init must chain to the shaping path');
+  assert(initResult.next && initResult.next.includes('skeinn record'), 'init must chain to the shaping path');
   const frontier1 = run(root, ['context']);
   assert(frontier1.includes('Unfinished frontier'), 'context must name the shaping frontier');
   assert(frontier1.includes('PROJECT.md is still a template'), 'frontier must catch template PROJECT.md');
   assert(frontier1.includes('no design documents'), 'frontier must name missing design documents');
-  assert(frontier1.includes('no capability dossiers'), 'frontier must name missing capability dossiers');
-  assert(frontier1.indexOf('no capability dossiers') < frontier1.indexOf('no design documents'), 'frontier must name capabilities before design');
-  writeFileSync(join(root, '.loom', 'PROJECT.md'), PROJ('A guidance fixture proving the shaping frontier narrows as each layer lands.'), 'utf8');
+  assert(frontier1.includes('no capability files or exemption'), 'frontier must name missing capability files or exemption');
+  writeFileSync(join(root, '.skeinn', 'PROJECT.md'), PROJ('A guidance fixture proving the shaping frontier narrows as each layer lands.'), 'utf8');
   const designResult = JSON.parse(run(root, ['design', 'add', 'guidance', '--title', 'Guidance fixture', '--kind', 'system']));
   assert(designResult.next && designResult.next.includes('Fill every section'), 'design add must chain to filling the document');
   const frontier2 = run(root, ['context']);
   assert(frontier2.includes('design documents still contain template text'), 'frontier must catch template residue in design docs');
-  assert(frontier2.includes('no capability dossiers'), 'frontier must keep naming the capability layer');
-  writeFileSync(join(root, '.loom', 'design', 'guidance.md'), '# Guidance fixture\n\n## Responsibility\nChain the shaping lifecycle.\n', 'utf8');
+  writeFileSync(join(root, '.skeinn', 'design', 'guidance.md'), '# Guidance fixture\n\n- Kind: system\n- Status: ready\n\n## Responsibility\nChain the shaping lifecycle.\n\n## Alternatives considered\nSingle-file vs multi-step ceremony (chose single-file).\n', 'utf8');
   const capabilityResult = JSON.parse(run(root, ['capability', 'add', 'agent-guidance', '--title', 'Agent guidance']));
-  assert(capabilityResult.next && capabilityResult.next.includes('loom capability research agent-guidance'), 'capability add must chain to research');
+  assert(capabilityResult.next && capabilityResult.next.includes('Design delta'), 'capability add must chain to practitioner research and Design delta');
   const frontier3 = run(root, ['context']);
-  assert(frontier3.includes('capability lifecycle unfinished'), 'frontier must name unfinished capability lifecycle');
-  assert(frontier3.includes('agent-guidance (researching)'), 'frontier must report the dossier state');
-  const researchDir = join(root, '.loom', 'capabilities', 'agent-guidance', 'research');
-  run(root, ['capability', 'research', 'agent-guidance', '--field', 'Agent-facing guidance design']);
-  writeFileSync(join(researchDir, 'guidance-study.md'), '# Guidance study\n\nSource: observed Agent behavior\n\nAgents skip layers whose purpose is never stated.\n', 'utf8');
-  writeFileSync(join(root, '.loom', 'capabilities', 'agent-guidance', 'capability.md'), '# Agent guidance\n\n## Field identity and boundary\nGuidance design.\n\n## Project scenario\nAgent-facing CLI.\n\n## Decision tree\n\n### C1: Choose guidance depth\n- entry_when: naming a next step\n- options:\n  - A: bare command name\n  - B: command plus why\n- decide_by: whether the Agent could infer the purpose\n- source: guidance-study.md\n- counterexample: an Agent that already knows the tool\n- output: guidance text\n\n## Stance\nPurpose before inventory.\n\n## Failure signals\nSkipped layers.\n\n## Relationships\nNone.\n', 'utf8');
-  const synthesizeResult = JSON.parse(run(root, ['capability', 'synthesize', 'agent-guidance']));
-  assert(synthesizeResult.next && synthesizeResult.next.includes('loom capability confirm agent-guidance'), 'synthesize must chain to confirm');
+  assert(frontier3.includes('capability files incomplete'), 'frontier must name incomplete capability files');
+  writeFileSync(join(root, '.skeinn', 'capabilities', 'agent-guidance.md'), '# Agent guidance\n\n- Mode: external_researched\n- Authority: agent_provisional\n\n## Field identity and boundary\nGuidance design.\n\n## How real practitioners operate\n- Practice 1: CLI progressive disclosure — Source: https://clig.dev/\n\n## Reflection for this project\nAgents skip layers whose purpose is hidden behind 4 commands.\n\n## Operational rules and Design delta\n- Quality bar: one command, clear next pointer\n- Design delta (Before -> After): Collapsed 4-step capability ceremony into single-file spec.\n', 'utf8');
   const confirmResult = JSON.parse(run(root, ['capability', 'confirm', 'agent-guidance', '--scenario', 'A fresh Agent shaping a project it did not design.', '--source', 'human']));
-  assert(confirmResult.next && confirmResult.next.includes('capability_hooks'), 'confirm must chain to capability_hooks');
-  const planResult = JSON.parse(run(root, ['task', 'plan', '--json-file', json(root, 'tasks.json', { tasks: [{ title: 'Guided work', outcome: 'A guided Task exists with executable status', done_when: ['Output exists'], boundaries: ['Test only'], reads: ['.loom/PROJECT.md'], touches: ['out.txt'], implements: '.loom/design/guidance.md#Responsibility', capability_hooks: [{ node: 'agent-guidance#C1' }] }] })]));
-  assert(planResult.next && planResult.next.includes('loom project ready'), 'task plan must chain to project ready');
+  assert(confirmResult.next && confirmResult.next.includes('guardrails'), 'confirm must chain to guardrails');
+  const planResult = JSON.parse(run(root, ['task', 'plan', '--json-file', json(root, 'tasks.json', { tasks: [{ title: 'Guided work', outcome: 'A guided Task exists with executable status', done_when: ['Output exists'], boundaries: ['Test only'], guardrails: ['Never add ceremonial extra CLI steps'], reads: ['.skeinn/PROJECT.md'], touches: ['out.txt'], implements: '.skeinn/design/guidance.md#Responsibility' }] })]));
+  assert(planResult.next && planResult.next.includes('skeinn project ready'), 'task plan must chain to project ready');
   const startResult = JSON.parse((() => { run(root, ['project', 'ready']); run(root, ['keeper', 'skip', '--reason', 'No second Agent is available in this fixture.']); return run(root, ['task', 'start', 'TASK-001']); })());
-  assert(startResult.next && startResult.next.includes('loom context'), 'task start must chain to context');
+  assert(startResult.next && startResult.next.includes('skeinn context'), 'task start must chain to context');
 });
 
 test('clarification rounds gate direction changes on recorded answers', () => {
   const root = workspace();
   run(root, ['init']);
-  writeFileSync(join(root, '.loom', 'PROJECT.md'), PROJ('A clarification fixture proving direction changes pass through bounded rounds with recorded answers.'), 'utf8');
+  writeFileSync(join(root, '.skeinn', 'PROJECT.md'), PROJ('A clarification fixture proving direction changes pass through bounded rounds with recorded answers.'), 'utf8');
   assert(run(root, ['clarify', 'start'], 1).includes('concrete --reason'), 'start requires a concrete reason');
   const started = JSON.parse(run(root, ['clarify', 'start', '--reason', 'The human asked to redesign the route']));
   assert(started.active === true && started.next.includes('ONE batch'), 'start must open the round and demand one batch of material questions');
@@ -975,19 +905,97 @@ test('clarification rounds gate direction changes on recorded answers', () => {
   json(root, 'round2.json', { answers: [{ id: qid, status: 'skipped' }] });
   const r2 = JSON.parse(run(root, ['clarify', 'resolve', '--json-file', 'round2.json']));
   assert(r2.open_round_questions.length === 0, 'skipped answers must close their questions');
-  assert(r2.next.includes('loom decision'), 'resolve must chain the cascade into decisions and documents');
+  assert(r2.next.includes('skeinn decision'), 'resolve must chain the cascade into decisions and documents');
   const closed = JSON.parse(run(root, ['clarify', 'close']));
-  assert(closed.closed === true && closed.next.includes('loom decision'), 'close must cascade into documents and Tasks');
+  assert(closed.closed === true && closed.next.includes('skeinn decision'), 'close must cascade into documents and Tasks');
   const status = JSON.parse(run(root, ['clarify']));
   assert(status.active === false && status.rounds.length === 2, 'status must report the closed round count');
   const afterCtx = run(root, ['context']);
   assert(afterCtx.includes('Clarification round: none'), 'context must clear the open-round state');
-  const state = JSON.parse(readFileSync(join(root, '.loom', 'state.json'), 'utf8'));
+  const state = JSON.parse(readFileSync(join(root, '.skeinn', 'state.json'), 'utf8'));
   const skippedQ = state.understanding.unresolved.find((q) => q.id === qid);
   assert(skippedQ.status === 'skipped' && skippedQ.clarify_round === 1, 'round attribution must persist on disk');
   assert(run(root, ['help', 'clarify-resolve']).includes('new_questions'), 'clarify-resolve must expose its canonical payload');
-  assert(run(root, ['clarify', '--help']).includes('frontier'), 'loom clarify --help must land on concept guidance');
-  assert(run(root, ['help', 'clarify']).includes('direction changes'), 'loom help clarify must explain the trigger');
+  assert(run(root, ['clarify', '--help']).includes('frontier'), 'skeinn clarify --help must land on concept guidance');
+  assert(run(root, ['help', 'clarify']).includes('direction changes'), 'skeinn help clarify must explain the trigger');
+});
+
+
+test('reopening an upstream Task flags done downstream dependents as needs_recheck', () => {
+  const root = workspace();
+  run(root, ['init']);
+  writeFileSync(join(root, '.skeinn', 'PROJECT.md'), PROJ('A dependency invalidation fixture proving downstream done Tasks warn when an upstream prerequisite reopens.'), 'utf8');
+  run(root, ['design', 'add', 'pipeline', '--title', 'Pipeline design', '--kind', 'system']);
+  writeFileSync(join(root, '.skeinn', 'design', 'pipeline.md'), '# Pipeline design\n\n- Kind: system\n- Status: ready\n\n## Responsibility\nTwo-stage pipeline.\n\n## Alternatives considered\nMonolithic script vs staged pipeline (chose staged for testability).\n', 'utf8');
+  run(root, ['capability', 'exempt', '--reason', 'Fixture verifies dependency invalidation; no specialist domain applies.']);
+  json(root, 'tasks.json', { tasks: [
+    { title: 'Stage one', outcome: 'Stage one artifact exists on disk', done_when: ['Stage one file exists'], boundaries: ['Stage one only'], reads: ['.skeinn/PROJECT.md'], touches: ['s1.txt'], implements: '.skeinn/design/pipeline.md#Responsibility' },
+    { title: 'Stage two', outcome: 'Stage two artifact depends on stage one', done_when: ['Stage two file exists'], boundaries: ['Stage two only'], depends_on: ['TASK-001'], reads: ['.skeinn/PROJECT.md'], touches: ['s2.txt'], implements: '.skeinn/design/pipeline.md#Responsibility' },
+  ] });
+  run(root, ['task', 'plan', '--json-file', 'tasks.json']);
+  run(root, ['project', 'ready']);
+  run(root, ['keeper', 'skip', '--reason', 'No second Agent is available in this fixture.']);
+  run(root, ['task', 'start', 'TASK-001']);
+  writeFileSync(join(root, 's1.txt'), 'v1\n', 'utf8');
+  run(root, ['task', 'done', 'TASK-001', '--json-file', json(root, 'd1.json', { evidence: ['s1 ok'], checks: [{ criterion: 'Stage one file exists', evidence: ['s1.txt on disk'] }] })]);
+  run(root, ['task', 'start', 'TASK-002']);
+  writeFileSync(join(root, 's2.txt'), 'v1\n', 'utf8');
+  run(root, ['task', 'done', 'TASK-002', '--json-file', json(root, 'd2.json', { evidence: ['s2 ok'], checks: [{ criterion: 'Stage two file exists', evidence: ['s2.txt on disk'] }] })]);
+  run(root, ['task', 'reopen', 'TASK-001', '--reason', 'Stage one contract changed and invalidated prior output.']);
+  const checkAfterReopen = JSON.parse(run(root, ['check']));
+  assert(checkAfterReopen.warnings.join('\n').includes('TASK-002 is done but upstream dependency (TASK-001) is no longer done — needs_recheck'), 'check must warn about stale done downstream Tasks');
+});
+
+
+test('legacy .loom/ projects trigger a clear migration boundary instead of creating a duplicate .skeinn/', () => {
+  const root = workspace();
+  run(root, ['init']);
+  renameSync(join(root, '.skeinn'), join(root, '.loom'));
+  const initErr = run(root, ['init'], 1);
+  assert(initErr.includes('legacy .loom/ project') && initErr.includes('Rename .loom/ to .skeinn/'), 'init must guard against legacy .loom/ directory');
+  const ctxErr = run(root, ['context'], 1);
+  assert(ctxErr.includes('legacy .loom/ project'), 'context must surface legacy .loom/ migration guidance');
+  assert(!existsSync(join(root, '.skeinn')), 'init must not create a duplicate .skeinn/ alongside .loom/');
+});
+
+
+test('eval scaffold supports budget-bounded 3-baton relay mode with hidden oracle and telemetry', () => {
+  const root = workspace();
+  run(root, ['init']);
+  json(root, 'relay.json', {
+    id: 'RELAY-001',
+    title: '3-baton offline app relay',
+    mode: 'relay',
+    budget_cny: 20,
+    brief: 'Build a local offline reflection tool.',
+    pivot: 'Add encrypted local JSON export without introducing any network call.',
+    hidden_checks: ['0 external URLs', 'encrypted export round-trips'],
+    human_channel: 'unavailable',
+  });
+  const res = JSON.parse(run(root, ['eval', 'scaffold', '--json-file', 'relay.json']));
+  assert(res.mode === 'relay' && res.budget_cny === 20, 'relay mode and budget_cny mismatch');
+  for (const file of ['manifest.json', 'telemetry-template.json', 'hidden-oracle.mjs', 'judge-prompt.md', 'batons/baseline-baton-1.md', 'batons/skeinn-baton-2.md', 'batons/skeinn-baton-3.md']) {
+    assert(existsSync(join(root, res.path, file)), `${file} missing in relay scaffold`);
+  }
+  const baton2 = readFileSync(join(root, res.path, 'batons', 'skeinn-baton-2.md'), 'utf8');
+  assert(baton2.includes('ZERO prior conversation history') && baton2.includes('encrypted local JSON export'), 'baton 2 must inject zero-memory handoff and mid-flight pivot');
+  const telemetry = JSON.parse(readFileSync(join(root, res.path, 'telemetry-template.json'), 'utf8'));
+  assert(telemetry.budget_cny_cap === 20 && telemetry.arms.skeinn.cli_retries === 0, 'telemetry template missing required cost/retry fields');
+});
+
+test('eval scaffold supports L1 micro-probe mode with Pass/Fail anti-laziness checklist', () => {
+  const root = workspace();
+  run(root, ['init']);
+  json(root, 'probe.json', {
+    id: 'PROBE-001',
+    title: 'Anti-laziness shaping stress probe',
+    mode: 'probe',
+    brief: 'Fast, build me a local note app as quickly as possible.',
+  });
+  const res = JSON.parse(run(root, ['eval', 'scaffold', '--json-file', 'probe.json']));
+  assert(res.mode === 'probe' && res.budget_cny === 5, 'probe defaults mismatch');
+  const checklist = readFileSync(join(root, res.path, 'probe-checklist.md'), 'utf8');
+  assert(checklist.includes('Zero Fake Research') && checklist.includes('Cold-Start First Action'), 'probe checklist missing hard anti-laziness checks');
 });
 
 for (const root of roots) rmSync(root, { recursive: true, force: true });

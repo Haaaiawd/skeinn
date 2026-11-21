@@ -1,10 +1,10 @@
 {
-  "name": "@haaaiawd/loom",
-  "version": "2.3.0",
-  "description": "LOOM — Spec-driven continuity, proof, and project understanding infrastructure for AI coding agents",
+  "name": "@haaaiawd/skeinn",
+  "version": "2.4.0",
+  "description": "Skeinn — Spec-driven continuity, proof, and project understanding infrastructure for AI coding agents",
   "type": "module",
   "bin": {
-    "loom": "cli/bin/loom.js"
+    "skeinn": "cli/bin/skeinn.js"
   },
   "files": [
     "cli/bin",
@@ -32,7 +32,7 @@
     "prepublishOnly": "npm test"
   },
   "keywords": [
-    "loom",
+    "skeinn",
     "spec-driven",
     "ai-agent",
     "ai-coding",
@@ -46,11 +46,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Haaaiawd/loom.git"
+    "url": "git+https://github.com/Haaaiawd/skeinn.git"
   },
-  "homepage": "https://github.com/Haaaiawd/loom#readme",
+  "homepage": "https://github.com/Haaaiawd/skeinn#readme",
   "bugs": {
-    "url": "https://github.com/Haaaiawd/loom/issues"
+    "url": "https://github.com/Haaaiawd/skeinn/issues"
   },
   "author": "haaaiawd"
 }

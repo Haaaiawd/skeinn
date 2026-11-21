@@ -15,14 +15,12 @@ desktop.ini
 # Logs
 *.log
 
-# LOOM 项目产物（loom init 生成的，不是框架本身）
+# Skeinn 项目产物（skeinn init 生成的，不是框架本身）
+.skeinn/
 .loom/
 AGENTS.md
 test_out.txt
 test_final.txt
-
-# Test runner workspace (created and reset by cli/test/run-all.js)
-test/.tmp-loom-test/
 
 # Local scratch space (never part of the framework release)
 tmp/
