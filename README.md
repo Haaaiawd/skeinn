@@ -163,3 +163,30 @@ skeinn check
 ## Verify it actually helps
 
 Run `npm test` (31 end-to-end contract tests), or use `skeinn eval scaffold` to run controlled **Evil Eval** comparisons (equal model, tools, workspace, user facts, forced resets, and blind order-swapped judging). See [EVIL_EVAL.md](EVIL_EVAL.md).
+
+### A real measured run
+
+We ran the full L2 relay on **DeepSeek-V4.1-Flash** — a cheap model where framework gains should be most visible. Same harness (opencode), same workspace rules, same brief: build the single-file offline 3-minute retro tool above, across **3 batons with hard memory resets**, with a mid-project pivot to encrypted export/import. Then a hidden oracle, and two independent blind judges scoring sealed X/Y packets in swapped order.
+
+```text
+Hidden oracle (8 objective checks)   baseline 8/8   skeinn 8/8   ← parity
+
+Total cost              baseline  ¥0.42 █████      skeinn  ¥0.82 ██████████
+Wall time               baseline   35 m █████      skeinn   60 m █████████
+Tokens (in+out+reason)  baseline  330 k ████       skeinn  741 k █████████
+Tests shipped           baseline   43   ██████████ skeinn    44  ██████████
+                        (pytest + Playwright)      (zero-dep `node --test`,
+                                                   real headless Chrome)
+```
+
+| Dimension (forced choice) | Judge pass 1 | Judge pass 2 |
+| :--- | :--- | :--- |
+| Intent fidelity & pivot survival | **Skeinn** | Tie |
+| Specialist capability & craft | **Skeinn** | **Skeinn** |
+| Cold-handoff continuity | Tie | Tie |
+| Oracle & proof honesty | Tie | Tie |
+| User burden & ceremony | **Skeinn** | **Skeinn** |
+| Net value per RMB | **Baseline** | **Baseline** |
+| **Overall** | **Skeinn** | **Skeinn** |
+
+*Caveats we keep honest: single run, single scenario, n=2 judges. The evidence judges cited, baseline's cost-efficiency win, and one packet-metadata leak we found and fixed-forward are in the full log: [docs/eval/RELAY-001.md](docs/eval/RELAY-001.md).*

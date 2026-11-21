@@ -216,6 +216,33 @@ skeinn check
 npm test
 ```
 
+### 一次真实实测
+
+我们在 **DeepSeek-V4.1-Flash** 上跑完了完整的 L2 接力实验——便宜模型上框架增益最容易拉开差距。同一 harness（opencode）、同一工作区规则、同一题目（上面的单文件离线 3 分钟复盘工具），**3 棒之间硬性清零记忆**，中途塞入加密导入导出需求反转；跑完后由隐藏 oracle 验收，再由两名互不知情的裁判对密封 X/Y 工件包做顺序交换盲评。
+
+```text
+隐藏 oracle（8 项客观断言）   baseline 8/8   skeinn 8/8   ← 持平
+
+总成本                 baseline  ¥0.42 █████      skeinn  ¥0.82 ██████████
+耗时                   baseline   35 m █████      skeinn   60 m █████████
+Token（输入+输出+推理） baseline  330 k ████       skeinn  741 k █████████
+交付测试数             baseline   43   ██████████ skeinn    44  ██████████
+                       （pytest + Playwright）    （零依赖 `node --test`，
+                                                  真实无头 Chrome）
+```
+
+| 维度（强制二选一） | 裁判 1（X→Y） | 裁判 2（Y→X） |
+| :--- | :--- | :--- |
+| 意图保真与反转存活 | **Skeinn** | 平 |
+| 专业能力深度 | **Skeinn** | **Skeinn** |
+| 冷交接连续性 | 平 | 平 |
+| Oracle 与实证诚实度 | 平 | 平 |
+| 用户负担与仪式感 | **Skeinn** | **Skeinn** |
+| 性价比 | **Baseline** | **Baseline** |
+| **总判** | **Skeinn** | **Skeinn** |
+
+*诚实的边界：单次实验、单一场景、n=2 裁判。裁判引用的具体证据、baseline 的性价比胜利、以及我们发现的一处工件包元数据泄漏，见完整遥测与判决日志：[docs/eval/RELAY-001.md](docs/eval/RELAY-001.md)。*
+
 ---
 
 ## 文档导航
@@ -226,4 +253,5 @@ npm test
 | [UX 与闭环规范](docs/UX_FLOW.md) | 人、Agent、Keeper 与 Task 的完整转换 |
 | [提示词目录](docs/PROMPT_CATALOG.md) | 注入给 Agent 的全部认知层与模板 |
 | [Evil Eval 协议](EVIL_EVAL.md) | 有无框架的受控对照实验规范 |
+| [RELAY-001 实测日志](docs/eval/RELAY-001.md) | DS-Flash 三棒接力的完整遥测与盲评判决 |
 | [更新日志](CHANGELOG.md) | v2.4.0 及历次演进记录 |
