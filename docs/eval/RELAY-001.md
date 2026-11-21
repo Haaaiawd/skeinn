@@ -94,3 +94,22 @@ Pass-2 judge noticed oracle.target paths ("skeinn-workspace"/"baseline-workspace
 inside judge-packet.json and ignored them for scoring. The packet should redact
 target paths in a future harness revision — recorded as a methodology fix, not a
 scoring factor.
+
+## Post-hoc: did the .skeinn docs earn their tokens?
+
+Judges never saw the state files (sidecar was excluded from packets by design),
+so doc quality was not blind-scored — only its effects were. Post-hoc read:
+
+- `capabilities/local-crypto-backup.md` (written by baton 2 under the pivot)
+  cites OWASP/MDN/W3C primary sources and, in its Reflection section, predicted
+  the export-while-running timer bug BEFORE implementation — that became the
+  `draftAtTimestamp` pause-on-export code judge 2 called "a sharp edge-semantic
+  call". Capability → design delta → shipped line: traceable.
+- `capabilities/timeboxed-reflection.md` predicted the generic failure mode
+  (canonical went-well/went-badly columns) and its design delta produced the
+  non-generic prompt set ("哪里没被说透").
+- `design/system.md` lists 8 alternatives including genuinely tempting ones
+  (IndexedDB, bundled Argon2id lib, stored password), rejected on real
+  constraints; `Applied capabilities` imports rules verbatim from the dossiers.
+- Caveat: `external_researched` source URLs cannot be disk-verified as truly
+  fetched vs model recall; content matches the real documents.
