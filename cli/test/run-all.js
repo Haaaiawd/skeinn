@@ -1540,6 +1540,29 @@ test('v3.0.1 audit integrity sentinels flag same-epoch reviewer_id reuse, commit
   assert(checkOut.warnings.some((w) => w.includes('reused 2 times within launch epoch 1')), 'must warn when reviewer_id is reused in same launch epoch');
 });
 
+test('v3.0.1 dispatch-level state lock serializes all mutating commands (no last-writer-win)', () => {
+  const root = initGitFixture();
+  const N = 5;
+  // Driver spawns N parallel `skeinn record` processes; without a dispatch-level
+  // lock, racing read->write cycles would lose most updates.
+  const script = [
+    'const { execFile } = require("node:child_process");',
+    `const cli = ${JSON.stringify(cli)};`,
+    `const cwd = ${JSON.stringify(root)};`,
+    `const jobs = Array.from({ length: ${N} }, (_, i) => new Promise((res) => {`,
+    "  execFile(process.execPath, [cli, 'record', '--confirm', 'concurrent record ' + i], { cwd }, (e) => res(!e));",
+    '}));',
+    'Promise.all(jobs).then((rs) => process.exit(rs.every(Boolean) ? 0 : 2));',
+  ].join('\n');
+  const out = spawnSync(process.execPath, ['-e', script], { encoding: 'utf8', timeout: 30000 });
+  assert(out.status === 0, `concurrent driver must complete: ${out.stderr}`);
+
+  const state = JSON.parse(readFileSync(join(root, '.skeinn', 'state.json'), 'utf8'));
+  const concurrent = state.understanding.confirmed.filter((c) => c.text.startsWith('concurrent record '));
+  const ids = new Set(concurrent.map((c) => c.id));
+  assert(concurrent.length === N && ids.size === N, `all ${N} concurrent writes must land with unique ids, got ${concurrent.length}`);
+});
+
 test('v3.0 freeform finding scopes (task: prefix, compound) gate focus and surface as advisories', () => {
   const root = workspace();
   run(root, ['init']);

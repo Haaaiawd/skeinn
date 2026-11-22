@@ -17,6 +17,7 @@ import {
   createCapability,
   createDesign,
   exemptCapabilities,
+  findRoot,
   focusTask,
   recordCheckpoint,
   recordDecision,
@@ -41,10 +42,12 @@ import {
   reopenTask,
   resolveClarify,
   scaffoldEval,
+  skeinnPaths,
   skipKeeper,
   startClarify,
   taskSummary,
   updateTask,
+  withStateLock,
 } from '../src/store.js';
 import { promptCatalog } from '../src/protocol.js';
 
@@ -358,7 +361,12 @@ try {
   const humanChannel = option('--human-channel');
   if (humanChannel && !['available', 'unavailable'].includes(humanChannel)) throw new Error('--human-channel must be available or unavailable');
 
-  switch (command) {
+  // Read-only commands never touch state; everything else runs inside the
+  // cross-process state lock so read->validate->modify->write transactions
+  // cannot lose updates to a parallel lane.
+  const READONLY_COMMANDS = new Set(['--version', '-v', '--help', '-h', 'help', 'init', 'context', 'check', 'prompts', 'resume', 'review']);
+  const run = () => {
+    switch (command) {
     case '--version':
     case '-v': {
       const here = dirname(fileURLToPath(import.meta.url));
@@ -562,6 +570,16 @@ try {
       break;
     default:
       throw new Error(`Unknown command: ${command}\n\n${help()}`);
+    }
+  };
+
+  if (READONLY_COMMANDS.has(command) || command === undefined) {
+    run();
+  } else {
+    let lockDir = null;
+    try { lockDir = skeinnPaths(findRoot()).skeinn; } catch { /* uninitialized: the command raises its own error */ }
+    if (lockDir) withStateLock(lockDir, run);
+    else run();
   }
 } catch (error) {
   const topic = activeStructuredHelpTopic();

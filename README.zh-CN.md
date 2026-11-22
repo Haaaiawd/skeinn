@@ -227,7 +227,7 @@ npm test   # 48 项端到端契约测试
 ### 已验证的限制（v3.0.1 之后的现状）
 
 - ~~**sidecar 可发现性**~~ **3.0.1 已修**——`--state <path>` 现在写一行 `.skeinn-state` 指针（照搬 git worktree 的 `.git` 文件原语）+ AGENTS.md 锚；`findRoot()`/`skeinnPaths()` 自动解析，新 Agent 跑 `skeinn context` 不需要知道任何路径 flag 即可连回外置状态。内嵌 `.skeinn/` 永远优先于指针；指针不可解析或被改道时 `skeinn check` 大声报错。盲评隐身拆成显式 `--no-anchor`。
-- ~~**无跨进程写锁**~~ **3.0.1 已修**——`withStateLock()` 把每个「读→校验→改→原子写」事务包进原子 `mkdir` 锁，写 `{pid, at}` 属主，30 秒/pid 已死的残留锁自动抢占，20–100ms 退避，5 秒上限。
+- ~~**无跨进程写锁**~~ **3.0.1 已修**——每个写命令都跑在 `withStateLock()` 里：完整的「读→校验→改→原子写」事务包进原子 `mkdir` 锁，写 `{pid, at}` 属主，30 秒/pid 已死的残留锁自动抢占，20–100ms 退避，5 秒上限（进程内可重入；只读命令不进锁）。
 - **非 git 审查窗口仍空转——已明确决定 git-only**——不加 mtime/hash 快照兜底（半套 VCS 只会更脆更错）；`skeinn check` 大声提示 reality-derived review 未启用并建议 `git init`。
 - **审查独立性仍是一串字——现在有哨兵但没有证明**——`skeinn check` 会警告：同一 launch 内 `reviewer_id` 复用、reviewer ID 与 `git config user.name`/`user.email` 雷同、未完成 launch 内重复 reset、reset 后 10 分钟内 close 交付任务。`SKEINN_HMAC_KEY` 签名已否决：能跑 CLI 的 Agent 也能读到同一个环境变量并伪造——诚实的边界在外部（隐藏 oracle、全新上下文 Keeper）。
 - **整本账本伪造仍可能**——`.skeinn/` 是裸 JSON；一致的 state+tasks+decisions 全重写能骗过哨兵。这是写明的边界，不是 bug：Skeinn 是仪式+审计层。

@@ -78,7 +78,11 @@ function isPidAlive(pid) {
   }
 }
 
+const heldLockDirs = new Set();
+
 export function withStateLock(skeinnDir, fn, { timeoutMs = 5000, staleMs = 30000 } = {}) {
+  const heldKey = resolve(skeinnDir);
+  if (heldLockDirs.has(heldKey)) return fn();
   mkdirSync(skeinnDir, { recursive: true });
   const lockDir = join(skeinnDir, '.lock');
   const ownerFile = join(lockDir, 'owner.json');
@@ -116,9 +120,11 @@ export function withStateLock(skeinnDir, fn, { timeoutMs = 5000, staleMs = 30000
     }
   }
 
+  heldLockDirs.add(heldKey);
   try {
     return fn();
   } finally {
+    heldLockDirs.delete(heldKey);
     try { rmSync(lockDir, { recursive: true, force: true }); } catch {}
   }
 }

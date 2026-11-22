@@ -15,8 +15,9 @@ Hardening release driven by the RELAY-002/003 judge findings and the EVIL-001 re
 
 ### `withStateLock()` — Cross-Process Integrity
 
-- All read→validate→modify→atomic-write transactions run inside an atomic `mkdir` `.lock/` with `{pid, at}` ownership in `owner.json`.
-- Stale lock recovery: >30s age or dead PID → preempted. 20–100ms randomized backoff, 5s ceiling, `finally` release.
+- The CLI dispatch wraps **every mutating command** (record, decision, task plan/focus/close/update/block/reopen, project ready, keeper record/reset/skip, design/capability/deliverable/clarify writes) in the lock — the whole read→validate→modify→atomic-write transaction, not just the write. Read-only commands (context, check, help, prompts) stay lock-free.
+- Lock is reentrant within a process, so inner store-level locking (`focusTask`, `closeTask`, `resetKeeper`) composes safely with the dispatch lock.
+- Atomic `mkdir` `.lock/` with `{pid, at}` ownership in `owner.json`; stale lock recovery (>30s age or dead PID → preempted); 20–100ms randomized backoff, 5s ceiling, `finally` release.
 
 ### Review-Window De-noising & Ergonomics
 
@@ -38,7 +39,7 @@ Hardening release driven by the RELAY-002/003 judge findings and the EVIL-001 re
 
 ### Tests
 
-53/53 — new regression coverage for pointer creation/discovery/precedence/tampering, stale-lock recovery, root-dir & result-file de-noising, `review_gate` configurability, one-line flags, trivial-evidence rejection, and the audit sentinels; all v3.0 + EVIL-001 hardening tests retained.
+54/54 — new regression coverage for pointer creation/discovery/precedence/tampering, stale-lock recovery, dispatch-level concurrent-writer serialization, root-dir & result-file de-noising, `review_gate` configurability, one-line flags, trivial-evidence rejection, and the audit sentinels; all v3.0 + EVIL-001 hardening tests retained.
 
 ## 3.0.0 — Intent-Only, Reality-Derived Continuity
 
