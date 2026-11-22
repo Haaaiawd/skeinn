@@ -36,7 +36,7 @@ AI coding feels effortless on small scripts, yet multi-day, multi-module project
 | **Context amnesia** | Compaction or a new session wipes out architecture, boundaries, and earlier corrections | Project truth, decisions, progress, and proof live on disk; a fresh Agent resumes directly |
 | **Generic average output** | Models default to safe statistical averages that look templated and amateur | Targets 1–3 bottleneck domains, **researches how real practitioners operate**, and reflects on project constraints |
 | **First-draft lock-in** | Codes the first plausible idea immediately, hiding expensive rework | Core designs force **at least 2 genuinely viable alternatives** (including a simpler or unconventional angle) |
-| **False-green completion** | Claims "done" while missing files, skipping edge cases, or breaking upstream work | A **fresh independent Keeper** audits build-readiness once; every Task closes with reproducible evidence |
+| **False-green completion** | Claims "done" while missing files, skipping edge cases, or breaking upstream work | A **fresh independent Keeper** gates launch on the active horizon — minors pass as advisories pinned to their Task/doc and surface at `task start` — while per-artifact digests drive delta re-checks and in-flight drift checkpoints; every Task closes with reproducible evidence |
 
 > **Core rule: Skeinn is for the Agent, not the human.**  
 > Multilingual by default — talk naturally in English, Chinese, Japanese, or any language you prefer. The Agent operates the `skeinn` CLI silently in the background.
@@ -57,12 +57,12 @@ You (natural chat in any language)          Agent (silent skeinn CLI on disk)
                                             → reflection → Design delta)
 
 3. Confirm the whole                        Freeze digest → fresh zero-memory
-                                            Keeper audits startability, fake
-                                            research, strawmen, and guardrails
+                                            Keeper gates launch on the active
+                                            horizon; minors pin to scope
 
 4. See working slices, steer anytime        Execute one restartable Task at a
                                             time with guardrails & exact proof;
-                                            direction shifts flag stale work
+                                            drift checkpoints & stale-work flags
 ```
 
 ---
@@ -151,6 +151,11 @@ skeinn deliverable add cli-core --title "CLI core" --kind module
 skeinn task plan --json-file work-map.json
 skeinn project ready
 skeinn keeper record --json-file keeper-result.json
+skeinn keeper resolve FND-001 --evidence "<closure proof>"   # close a pinned finding
+skeinn keeper checkpoint prompt --milestone M1               # in-flight drift audit
+skeinn keeper checkpoint record --json-file checkpoint-result.json
+skeinn context --checkpoint                                  # checkpoint-scoped slice
+# kind: "spike" tasks may start during shaping for empirical unknowns
 skeinn task next && skeinn task start TASK-001
 skeinn task done TASK-001 --json-file evidence.json
 skeinn check
@@ -162,7 +167,7 @@ skeinn check
 
 ## Verify it actually helps
 
-Run `npm test` (31 end-to-end contract tests), or use `skeinn eval scaffold` to run controlled **Evil Eval** comparisons (equal model, tools, workspace, user facts, forced resets, and blind order-swapped judging). See [EVIL_EVAL.md](EVIL_EVAL.md).
+Run `npm test` (38 end-to-end contract tests), or use `skeinn eval scaffold` to run controlled **Evil Eval** comparisons (equal model, tools, workspace, user facts, forced resets, and blind order-swapped judging). See [EVIL_EVAL.md](EVIL_EVAL.md).
 
 ### A real measured run
 

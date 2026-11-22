@@ -355,12 +355,25 @@ ${assumptions.length ? `### Active assumptions\n\n${assumptions.map((item) => `-
 ${keeperFeedback}`;
 }
 
-export function keeperProtocol({ attemptNumber, preparedDigest } = {}) {
+export function keeperProtocol({ attemptNumber, preparedDigest, deltaMode = false, dirtyArtifacts = [], horizonTaskIds = [] } = {}) {
   return `# Skeinn independent Keeper handoff
 
 You are a fresh Agent with no access to the shaping conversation. Do not repair the project and do not
 edit implementation. Use only this workspace and the Skeinn CLI. Run \`skeinn context --keeper\`, inspect
 the referenced files, and attempt a real handoff from disk.
+
+${deltaMode
+    ? `## DELTA RE-CHECK MODE (Attempt ${attemptNumber})
+
+This is a follow-up verification round. Audit ONLY:
+1. Whether prior open blocking findings are genuinely closed with evidence, and
+2. Whether the artifacts modified in this repair (${dirtyArtifacts.length ? dirtyArtifacts.join(', ') : 'changed artifacts'}) introduced any new blocking contradiction.
+
+Do NOT re-litigate unchanged sections outside the changed set. Any out-of-scope observation must be recorded as \`severity: "minor"\` with its concrete \`scope\` so it becomes a pinned advisory rather than reopening the loop.`
+    : `## PROGRESSIVE HORIZON SCOPE (Attempt ${attemptNumber || 1})
+
+Focus blocking scrutiny on the active topological horizon (${horizonTaskIds.length ? horizonTaskIds.join(', ') : 'immediately executable tasks and their 1–2 hop successors'}) and the Design/Capability files they depend on. Do not demand distant future details upfront — issues affecting tasks outside the current horizon belong as \`severity: "minor"\` pinned to their target \`scope\` (e.g. \`TASK-055\` or \`.skeinn/design/auth.md\`).`
+}
 
 Your job is a Crux review: check that the chain from responsible intent to verifiable behavior is intact.
 Do not judge document polish or count. Judge whether a fresh Agent could start from disk and still
@@ -438,7 +451,7 @@ does not block the first Task). Every revision requires fresh verification befor
 {
   "run_id": "<unique-id>",
   "prepared_digest": "<digest-above>",
-  "verdict": "passed | needs_revision | blocked",
+  "verdict": "passed | passed_with_advisories | needs_revision | blocked",
   "review": {
     "mode": "independent | self",
     "reviewer_id": "<fresh Agent or current Agent identity>",
@@ -448,6 +461,7 @@ does not block the first Task). Every revision requires fresh verification befor
   "gaps": [
     {
       "gap": "<missing or contradictory truth>",
+      "scope": "<TASK-ID, .skeinn/design/<doc>.md, or project>",
       "severity": "blocking | minor",
       "why_it_blocks_start": "<concrete consequence for a fresh Agent>",
       "evidence_to_close": "<observable condition that would close it>"
@@ -461,14 +475,65 @@ Record the result with \`skeinn keeper record --json-file <result.json>\`. Use \
 a genuinely fresh Agent, could responsibly begin the first Task, and can record \`review.mode\` as
 \`independent\` with concrete isolation evidence.
 If you shaped this project, do not review your own work as independent; ask the host for a fresh Agent,
-or use \`skeinn keeper skip --reason <concrete limitation>\` when isolation is unavailable. Otherwise use
-\`needs_revision\` with concrete gaps and the
-observable evidence that would close each one, or \`blocked\` when progress requires unavailable
-authority or external state. A failed attempt returns the project to shaping; revision requires a
-changed digest and another fresh Keeper, including for minor gaps. Verify each prior finding
+or use \`skeinn keeper skip --reason <concrete limitation>\` when isolation is unavailable. Use \`passed_with_advisories\` when ZERO blocking gaps remain in the active horizon and only \`minor\`
+advisories exist — those advisories are pinned to their \`scope\` and surfaced automatically when the
+affected Task starts, without wasting another full review round. Use \`needs_revision\` ONLY when at
+least one \`blocking\` gap remains in the active horizon (or changed repair zone), or \`blocked\` when
+progress requires unavailable authority or external state. Revision requires a changed digest and
+another fresh Keeper. Verify each prior finding
 against its requested closure evidence before issuing a pass. For a revised pass, include
 \`closure_results: [{ "gap": "<exact prior gap text>", "evidence": "<observed closure proof>" }]\`
 covering every prior gap. These records are retained with the review.`;
+}
+
+
+export function checkpointProtocol({ milestone = 'in-flight', dirtyArtifacts = [], openFindings = [], recentDoneTasks = [], preparedDigest = '' } = {}) {
+  return `# Skeinn independent In-Flight Checkpoint
+
+You are a fresh Agent auditing an active build at milestone \`${milestone}\`. Do NOT rewrite code or
+re-run full Launch review. Run \`skeinn context --checkpoint\` and inspect ONLY the incremental slice:
+
+- Dirty / newly-entering horizon artifacts: ${dirtyArtifacts.length ? dirtyArtifacts.join(', ') : 'none (audit open findings & git diff)'}
+- Delivery Tasks completed since last clean review (diff their touches against spec): ${recentDoneTasks.length ? recentDoneTasks.map((t) => `${t.id} "${t.title}"${t.implements ? ` implements ${t.implements}` : ''} → touches: ${t.touches.join(', ')}`).join(' | ') : 'none'}
+- Open pinned findings in scope: ${openFindings.length ? openFindings.map((f) => `${f.id} [${f.scope}]: ${f.text}`).join(' | ') : 'none'}
+- Snapshot digest: \`${preparedDigest || '<computed at record>'}\`
+
+## Checkpoint audit (3 focused checks)
+
+1. **Spec-to-Code drift**: Compare recent implementation changes against the referenced Design docs
+   and Capability guardrails. If code drifted from spec, require an explicit choice: fix the code OR
+   record \`skeinn decision\` to update the spec — never allow silent drift.
+2. **Newly entering horizon**: For any distant design/capability/task that just entered the active
+   horizon without prior review, verify it is buildable and contradiction-free.
+3. **Evidence & advisory closure**: Verify that claimed acceptance evidence is real (not false green)
+   and check whether open pinned findings have reproducible closure evidence.
+
+Record your verdict with \`skeinn keeper checkpoint record --json-file <result.json>\`:
+
+\`\`\`json
+{
+  "run_id": "<unique-id>",
+  "milestone": "${milestone}",
+  "verdict": "clean | drift_detected | blocked",
+  "review": {
+    "mode": "independent",
+    "reviewer_id": "<fresh Agent identity>",
+    "evidence": "<how the host isolated this checkpoint review>"
+  },
+  "summary": "<concise in-flight audit judgment>",
+  "findings": [
+    {
+      "gap": "<concrete drift or newly discovered gap>",
+      "scope": "<TASK-ID or .skeinn/design/<doc>.md>",
+      "severity": "blocking | minor"
+    }
+  ],
+  "closure_results": [
+    { "id": "FND-001", "evidence": "<observed closure proof>" }
+  ],
+  "evidence": ["<file, diff, or test command supporting the verdict>"]
+}
+\`\`\``;
 }
 
 export const PROJECT_TEMPLATE = `# Project Whole and Document Map

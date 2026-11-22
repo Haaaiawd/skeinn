@@ -17,10 +17,14 @@ import {
   createCapability,
   createDesign,
   exemptCapabilities,
+  recordCheckpoint,
   recordDecision,
+  resetKeeper,
+  resolveFinding,
   getCapability,
   getCapabilityStatus,
   getDesign,
+  getCheckpointPrompt,
   getKeeperPrompt,
   getTask,
   importTasks,
@@ -252,7 +256,8 @@ Required: outcome + acceptance[criterion/verify_by/evidence] + boundaries + exac
 implements|design_exemption + covers + depends_on. Recommended: guardrails[] (1–3 specialist red
 lines carried forward from capability/design). Canonical payload: skeinn task plan --help.
 Completion needs one acceptance_results entry per criterion; start/done refuse unclassified Tasks
-and missing declared outputs.`,
+and missing declared outputs. Use kind: "spike" for pre-Launch empirical prototypes (delivery Tasks
+cannot depend_on a spike; distill findings back into Design/Capability).`,
 
   deliverable: `skeinn deliverable — the delivery surface, decomposed
 
@@ -349,7 +354,7 @@ try {
       break;
     case 'context':
     case 'resume':
-      output(compileContext({ taskId: option('--task'), keeper: argv.includes('--keeper'), full: argv.includes('--full'), humanChannel: humanChannel || 'available' }));
+      output(compileContext({ taskId: option('--task'), keeper: argv.includes('--keeper'), checkpoint: argv.includes('--checkpoint'), full: argv.includes('--full'), humanChannel: humanChannel || 'available' }));
       break;
     case 'prompts':
       output(promptCatalog());
@@ -377,8 +382,8 @@ try {
       break;
     }
     case 'project':
-      if (subcommand !== 'ready') throw new Error('Usage: skeinn project ready');
-      output(markReady());
+      if (subcommand !== 'ready') throw new Error('Usage: skeinn project ready [--force-round --reason <text>]');
+      output(markReady(undefined, { forceRound: argv.includes('--force-round'), reason: option('--reason') }));
       break;
     case 'design': {
       if (argv.includes('--help')) output(conceptHelp('design'));
@@ -477,7 +482,17 @@ try {
       else if (subcommand === 'prompt') output(getKeeperPrompt());
       else if (subcommand === 'record') output(recordKeeper(jsonFile()));
       else if (subcommand === 'skip') output(skipKeeper(option('--reason')));
-      else throw new Error('Usage: skeinn keeper prompt|record|skip');
+      else if (subcommand === 'resolve') {
+        if (!rest[0]) throw new Error('Usage: skeinn keeper resolve <FND-ID> --evidence <proof>');
+        output(resolveFinding(rest[0], { evidence: option('--evidence') }));
+      } else if (subcommand === 'reset') {
+        output(resetKeeper(option('--reason')));
+      } else if (subcommand === 'checkpoint') {
+        const action = rest[0];
+        if (action === 'prompt') output(getCheckpointPrompt({ milestone: option('--milestone') }));
+        else if (action === 'record') output(recordCheckpoint(jsonFile()));
+        else throw new Error('Usage: skeinn keeper checkpoint prompt [--milestone <name>] | record --json-file <result.json>');
+      } else throw new Error('Usage: skeinn keeper prompt|record|skip|resolve|reset|checkpoint');
       break;
     }
     case 'eval':

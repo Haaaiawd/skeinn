@@ -662,7 +662,7 @@ test('help and source surface stay minimal', () => {
   assert(chineseReadme.includes('--source human'), 'Chinese README should teach capability authority provenance');
   assert(chineseReadme.includes('review.mode: "independent"'), 'Chinese README should teach independent Keeper provenance');
   assert(chineseReadme.includes('skeinn task done --help'), 'Chinese README should point structured writes to command-local help');
-  assert(run(root, ['--version']) === 'skeinn 2.4.0', 'version mismatch');
+  assert(run(root, ['--version']) === 'skeinn 2.5.0', 'version mismatch');
 });
 
 const PROJ = (text) => `# Project Whole\n\n## Intended result\n${text}\n\n## People and reality\nA human collaborates naturally while the Agent silently preserves state.\n\n## Whole behavior\nThe Agent clarifies, records, builds a work map, resumes one Task, and proves it done.\n\n## Boundaries\nThe human never has to operate Skeinn. Irreversible work needs authority.\n\n## System shape\nHuman-readable project truth plus structured Task state compiled by a CLI.\n\n## Completion and failure\nA fresh Agent can start without chat memory; document volume alone is failure.\n`;
@@ -784,7 +784,7 @@ test('a Keeper pass must close findings still open across all earlier attempts',
   json(root, 'k2.json', { run_id: 'keeper-ledger-002', prepared_digest: ready2.digest, verdict: 'needs_revision', summary: 'A different finding.', evidence: ['Read the whole again.'], gaps: ['Gap B: document the test command'] });
   run(root, ['keeper', 'record', '--json-file', 'k2.json']);
   writeFileSync(join(root, '.skeinn', 'PROJECT.md'), `${PROJ('A cumulative findings fixture proving earlier gaps cannot vanish when a later round reports different ones.')} \nRevised after round two.\n`, 'utf8');
-  const ready3 = JSON.parse(run(root, ['project', 'ready']));
+  const ready3 = JSON.parse(run(root, ['project', 'ready', '--force-round', '--reason', 'Explicitly testing cumulative closure across a 3rd round.']));
   json(root, 'k3.json', { run_id: 'keeper-ledger-003', prepared_digest: ready3.digest, verdict: 'passed', summary: 'Looks ready.', evidence: ['Reviewed.'], review: independentReview('fresh-ledger-agent'), closure_results: [{ gap: 'Gap B: document the test command', evidence: 'README now names npm test' }] });
   const rejected = run(root, ['keeper', 'record', '--json-file', 'k3.json'], 1);
   assert(rejected.includes('Gap A: name the CLI entry point'), 'a pass must still close findings from earlier attempts');
@@ -996,6 +996,218 @@ test('eval scaffold supports L1 micro-probe mode with Pass/Fail anti-laziness ch
   assert(res.mode === 'probe' && res.budget_cny === 5, 'probe defaults mismatch');
   const checklist = readFileSync(join(root, res.path, 'probe-checklist.md'), 'utf8');
   assert(checklist.includes('Zero Fake Research') && checklist.includes('Cold-Start First Action'), 'probe checklist missing hard anti-laziness checks');
+});
+
+
+test('passed_with_advisories pins Task & Doc findings, surfaces them on task start, and gates blocking scope findings', () => {
+  const root = workspace();
+  run(root, ['init']);
+  writeFileSync(join(root, '.loom' === '.skeinn' ? '.loom' : '.skeinn', 'PROJECT.md'), PROJ('A Keeper 2.0 fixture verifying passed_with_advisories, scope-pinned Task and Doc advisories, and evidence-backed closure.'), 'utf8');
+  run(root, ['design', 'add', 'auth', '--title', 'Auth design', '--kind', 'system']);
+  writeFileSync(join(root, '.skeinn', 'design', 'auth.md'), '# Auth design\n\n- Kind: system\n- Status: ready\n\n## Responsibility\nLocal token auth.\n\n## Alternatives considered\nSession cookie vs bearer token (chose bearer token for CLI simplicity).\n', 'utf8');
+  run(root, ['capability', 'exempt', '--reason', 'Fixture verifies Keeper 2.0 pinned findings; no specialist domain applies.']);
+  json(root, 'tasks.json', { tasks: [
+    { title: 'Build auth', outcome: 'Local token auth module exists on disk', done_when: ['auth.js exists'], boundaries: ['Test only'], reads: ['.skeinn/PROJECT.md', '.skeinn/design/auth.md'], touches: ['auth.js'], implements: '.skeinn/design/auth.md#Responsibility' },
+  ] });
+  run(root, ['task', 'plan', '--json-file', 'tasks.json']);
+  const ready = JSON.parse(run(root, ['project', 'ready']));
+
+  // Blocking gap inside passed_with_advisories must be rejected
+  json(root, 'bad-adv.json', {
+    run_id: 'keeper-adv-bad-001',
+    prepared_digest: ready.digest,
+    verdict: 'passed_with_advisories',
+    summary: 'Trying to smuggle blocking gap.',
+    gaps: [{ gap: 'Missing core contract', scope: 'TASK-001', severity: 'blocking' }],
+    evidence: ['Inspected project.'],
+    review: independentReview('fresh-adv-agent-1'),
+  });
+  assert(run(root, ['keeper', 'record', '--json-file', 'bad-adv.json'], 1).includes('cannot include blocking gaps'), 'passed_with_advisories must reject blocking gaps');
+
+  // Minor-only advisories (one pinned to TASK-001, one pinned to .skeinn/design/auth.md, plus one duplicate) pass immediately
+  json(root, 'ok-adv.json', {
+    run_id: 'keeper-adv-ok-001',
+    prepared_digest: ready.digest,
+    verdict: 'passed_with_advisories',
+    summary: 'Ready to build with two minor advisories.',
+    gaps: [
+      { gap: 'Add server.js to TASK-001 reads when wiring router', scope: 'TASK-001', severity: 'minor' },
+      { gap: 'Add server.js to TASK-001 reads when wiring router', scope: 'TASK-001', severity: 'minor' },
+      { gap: 'Clarify token expiry wording in auth.md', scope: '.skeinn/design/auth.md', severity: 'minor' },
+    ],
+    evidence: ['Horizon verified buildable.'],
+    review: independentReview('fresh-adv-agent-2'),
+  });
+  const keeperState = JSON.parse(run(root, ['keeper', 'record', '--json-file', 'ok-adv.json']));
+  assert(keeperState.launch_completed === true && keeperState.findings.length === 2, 'advisories should deduplicate and mark launch_completed');
+
+  // Starting TASK-001 automatically surfaces BOTH the Task-pinned AND the Doc-pinned advisory
+  const started = JSON.parse(run(root, ['task', 'start', 'TASK-001']));
+  assert(started.pinned_advisories.length === 2, 'task start must surface both Task-pinned and Doc-pinned advisories');
+  const ctx = run(root, ['context']);
+  assert(ctx.includes('Pinned Keeper findings for TASK-001') && ctx.includes('Clarify token expiry wording'), 'active context must surface pinned advisories');
+
+  // Resolving requires concrete evidence >= 10 chars
+  assert(run(root, ['keeper', 'resolve', 'FND-001', '--evidence', 'ok'], 1).includes('at least 10 characters'), 'resolve must reject rubber-stamp evidence');
+  const closed = JSON.parse(run(root, ['keeper', 'resolve', 'FND-001', '--evidence', 'Added server.js to TASK-001 reads and verified router import.']));
+  assert(closed.status === 'closed', 'finding should close with evidence');
+});
+
+test('round 2+ Keeper runs in per-file Delta Re-check Mode and ping-pong non-convergence halts blind loops', () => {
+  const root = workspace();
+  run(root, ['init']);
+  writeFileSync(join(root, '.skeinn', 'PROJECT.md'), PROJ('A Delta-mode fixture proving round 2 only re-injects changed design docs and halts non-convergent ping-pong loops.'), 'utf8');
+  run(root, ['design', 'add', 'stable-doc', '--title', 'Stable doc', '--kind', 'system']);
+  writeFileSync(join(root, '.skeinn', 'design', 'stable-doc.md'), '# Stable doc\n\n- Kind: system\n- Status: ready\n\n## Responsibility\nUnchanged subsystem.\n\n## Alternatives considered\nOption A vs Option B.\n', 'utf8');
+  run(root, ['design', 'add', 'changed-doc', '--title', 'Changed doc', '--kind', 'system']);
+  writeFileSync(join(root, '.skeinn', 'design', 'changed-doc.md'), '# Changed doc\n\n- Kind: system\n- Status: ready\n\n## Responsibility\nNeeds repair.\n\n## Alternatives considered\nOption A vs Option B.\n', 'utf8');
+  run(root, ['capability', 'exempt', '--reason', 'Fixture verifies Delta mode and convergence guard; no specialist domain applies.']);
+  json(root, 'tasks.json', { tasks: [{ title: 'Implement changed', outcome: 'Changed subsystem implemented cleanly', done_when: ['out.txt exists'], boundaries: ['Test only'], reads: ['.skeinn/PROJECT.md', '.skeinn/design/changed-doc.md'], touches: ['out.txt'], implements: '.skeinn/design/changed-doc.md#Responsibility' }] });
+  run(root, ['task', 'plan', '--json-file', 'tasks.json']);
+
+  const r1 = JSON.parse(run(root, ['project', 'ready']));
+  assert(r1.delta_mode === false, 'round 1 should not be delta mode');
+  json(root, 'k1.json', { run_id: 'delta-run-001', prepared_digest: r1.digest, verdict: 'needs_revision', summary: 'One blocking gap.', gaps: [{ gap: 'Fix changed-doc boundary', scope: '.skeinn/design/changed-doc.md', severity: 'blocking' }], evidence: ['Read changed-doc.'] });
+  run(root, ['keeper', 'record', '--json-file', 'k1.json']);
+
+  // Edit ONLY changed-doc.md
+  writeFileSync(join(root, '.skeinn', 'design', 'changed-doc.md'), '# Changed doc\n\n- Kind: system\n- Status: ready\n\n## Responsibility\nRepaired boundary.\n\n## Alternatives considered\nOption A vs Option B.\n', 'utf8');
+  const r2 = JSON.parse(run(root, ['project', 'ready']));
+  assert(r2.delta_mode === true && r2.dirty_artifacts.includes('.skeinn/design/changed-doc.md') && !r2.dirty_artifacts.includes('.skeinn/design/stable-doc.md'), 'round 2 must isolate changed-doc in dirty_artifacts');
+  const k2Ctx = run(root, ['context', '--keeper']);
+  assert(k2Ctx.includes('DELTA RE-CHECK MODE'), 'round 2 Keeper context must declare DELTA RE-CHECK MODE');
+  assert(k2Ctx.includes('## Design document: changed-doc.md') && !k2Ctx.includes('## Design document: stable-doc.md'), 'delta Keeper context must omit unchanged design docs');
+
+  // Round 2 still reports 1 blocking gap (1 -> 1 ping-pong, did not strictly decrease)
+  json(root, 'k2.json', { run_id: 'delta-run-002', prepared_digest: r2.digest, verdict: 'needs_revision', summary: 'New blocking gap.', gaps: [{ gap: 'Another gap', scope: '.skeinn/design/changed-doc.md', severity: 'blocking' }], evidence: ['Read again.'] });
+  run(root, ['keeper', 'record', '--json-file', 'k2.json']);
+  writeFileSync(join(root, '.skeinn', 'design', 'changed-doc.md'), '# Changed doc\n\n- Kind: system\n- Status: ready\n\n## Responsibility\nRepaired again.\n\n## Alternatives considered\nOption A vs Option B.\n', 'utf8');
+  const halted = run(root, ['project', 'ready'], 1);
+  assert(halted.includes('Non-convergent Keeper loop detected'), 'ping-pong 1->1 must trigger non-convergence guard');
+  const forced = JSON.parse(run(root, ['project', 'ready', '--force-round', '--reason', 'Resolved root contradiction in changed-doc.md.']));
+  assert(forced.ready_for_keeper === true, '--force-round with concrete reason must unlock');
+});
+
+test('late-entering horizon docs and in-flight checkpoints work via reviewed_digests without reopening Launch', () => {
+  const root = workspace();
+  run(root, ['init']);
+  writeFileSync(join(root, '.skeinn', 'PROJECT.md'), PROJ('A horizon-progression fixture proving distant design docs earn semantic review via checkpoint when entering the active horizon.'), 'utf8');
+  run(root, ['design', 'add', 'm1', '--title', 'Milestone 1', '--kind', 'system']);
+  writeFileSync(join(root, '.skeinn', 'design', 'm1.md'), '# Milestone 1\n\n- Kind: system\n- Status: ready\n\n## Responsibility\nStage 1.\n\n## Alternatives considered\nA vs B.\n', 'utf8');
+  run(root, ['design', 'add', 'm4-billing', '--title', 'Distant Billing', '--kind', 'system']);
+  writeFileSync(join(root, '.skeinn', 'design', 'm4-billing.md'), '# Distant Billing\n\n- Kind: system\n- Status: ready\n\n## Responsibility\nDistant stage 4.\n\n## Alternatives considered\nA vs B.\n', 'utf8');
+  run(root, ['capability', 'exempt', '--reason', 'Fixture verifies horizon progression and checkpoint; no specialist domain applies.']);
+  // 4-step chain so TASK-004 (and m4-billing.md) is at depth 3 (outside initial depth=2 horizon)
+  json(root, 'tasks.json', { tasks: [
+    { title: 'Step 1', outcome: 'Step 1 output exists on disk', done_when: ['s1 ok'], boundaries: ['s1'], reads: ['.skeinn/PROJECT.md', '.skeinn/design/m1.md'], touches: ['s1.txt'], implements: '.skeinn/design/m1.md#Responsibility' },
+    { title: 'Step 2', outcome: 'Step 2 output exists on disk', done_when: ['s2 ok'], boundaries: ['s2'], depends_on: ['TASK-001'], reads: ['.skeinn/PROJECT.md', '.skeinn/design/m1.md'], touches: ['s2.txt'], implements: '.skeinn/design/m1.md#Responsibility' },
+    { title: 'Step 3', outcome: 'Step 3 output exists on disk', done_when: ['s3 ok'], boundaries: ['s3'], depends_on: ['TASK-002'], reads: ['.skeinn/PROJECT.md', '.skeinn/design/m1.md'], touches: ['s3.txt'], implements: '.skeinn/design/m1.md#Responsibility' },
+    { title: 'Step 4 Billing', outcome: 'Billing output exists on disk', done_when: ['s4 ok'], boundaries: ['s4'], depends_on: ['TASK-003'], reads: ['.skeinn/PROJECT.md', '.skeinn/design/m4-billing.md'], touches: ['s4.txt'], implements: '.skeinn/design/m4-billing.md#Responsibility' },
+  ] });
+  run(root, ['task', 'plan', '--json-file', 'tasks.json']);
+  const ready = JSON.parse(run(root, ['project', 'ready']));
+  assert(!ready.horizon_tasks.includes('TASK-004'), 'TASK-004 at depth 3 should be outside initial Launch horizon');
+  json(root, 'kpass.json', { run_id: 'horizon-launch-001', prepared_digest: ready.digest, verdict: 'passed', summary: 'Initial horizon ready.', evidence: ['Checked horizon.'], review: independentReview('fresh-horizon-agent') });
+  run(root, ['keeper', 'record', '--json-file', 'kpass.json']);
+
+  // Complete TASK-001 -> TASK-004 (and m4-billing.md) now enters depth=2 horizon!
+  run(root, ['task', 'start', 'TASK-001']);
+  writeFileSync(join(root, 's1.txt'), 'done', 'utf8');
+  run(root, ['task', 'done', 'TASK-001', '--json-file', json(root, 'd1.json', { evidence: ['s1 ok'], checks: [{ criterion: 's1 ok', evidence: ['s1.txt exists'] }] })]);
+
+  // check & checkpoint context automatically surface m4-billing.md as dirty (never reviewed!) without reopening Launch
+  const chkWarn = JSON.parse(run(root, ['check'])).warnings.join('\n');
+  assert(chkWarn.includes('.skeinn/design/m4-billing.md'), 'check must detect newly-entering unreviewed horizon doc');
+  const chkCtx = run(root, ['context', '--checkpoint']);
+  assert(chkCtx.includes('## Design document (dirty): m4-billing.md'), 'checkpoint context must inject newly-entering horizon doc');
+  const chkPrompt = run(root, ['keeper', 'checkpoint', 'prompt', '--milestone', 'pre-billing']);
+  assert(chkPrompt.includes('m4-billing.md'), 'checkpoint prompt must list dirty horizon artifacts');
+
+  // Record clean checkpoint -> commits m4-billing.md into reviewed_digests and clears warning
+  json(root, 'chk.json', { run_id: 'chk-run-001', milestone: 'pre-billing', verdict: 'clean', summary: 'Billing design verified.', evidence: ['Inspected m4-billing.md'], review: independentReview('fresh-chk-agent') });
+  run(root, ['keeper', 'checkpoint', 'record', '--json-file', 'chk.json']);
+  const afterChk = JSON.parse(run(root, ['check'])).warnings.join('\n');
+  assert(!afterChk.includes('m4-billing.md'), 'clean checkpoint must commit horizon digests and clear dirty warning');
+});
+
+test('spike tasks run in shaping before Keeper and keeper reset cleanly reopens Launch on direction pivots', () => {
+  const root = workspace();
+  run(root, ['init']);
+  writeFileSync(join(root, '.skeinn', 'PROJECT.md'), PROJ('A spike and reset fixture proving empirical prototypes can run before Launch and major pivots can reset reviewed digests.'), 'utf8');
+  json(root, 'spike.json', { tasks: [{ title: 'Benchmark local storage quota', kind: 'spike', outcome: 'Measured actual browser storage limit for offline drafts', acceptance: [{ criterion: 'Empirical quota recorded in spike-result.txt', verify_by: 'Check spike-result.txt exists', evidence: '' }], boundaries: ['No production UI code'], reads: ['.skeinn/PROJECT.md'], touches: ['spike-result.txt'] }] });
+  run(root, ['task', 'plan', '--json-file', 'spike.json']);
+  run(root, ['task', 'start', 'TASK-001']);
+  writeFileSync(join(root, 'spike-result.txt'), '5MB localStorage limit confirmed\n', 'utf8');
+  const doneSpike = JSON.parse(run(root, ['task', 'done', 'TASK-001', '--json-file', json(root, 'sdone.json', { evidence: ['Measured 5MB'], acceptance_results: [{ criterion: 'Empirical quota recorded in spike-result.txt', evidence: 'spike-result.txt contains measured limit' }] })]));
+  assert(doneSpike.status === 'done' && doneSpike.kind === 'spike', 'spike should complete in shaping before Keeper');
+
+  // Test keeper reset escape hatch
+  const resetRes = JSON.parse(run(root, ['keeper', 'reset', '--reason', 'Major product pivot from local-only to collaborative sync.']));
+  assert(resetRes.reset === true, 'keeper reset should succeed');
+  const state = JSON.parse(readFileSync(join(root, '.skeinn', 'state.json'), 'utf8'));
+  assert(state.keeper.launch_completed === false && Object.keys(state.keeper.reviewed_digests).length === 0, 'keeper reset must clear reviewed_digests and launch_completed');
+  assert(readFileSync(join(root, '.skeinn', 'DECISIONS.md'), 'utf8').includes('Keeper relaunch reset'), 'keeper reset must log a decision');
+});
+
+test('silent-drift watch: 5 delivery Tasks ring the checkpoint bell, context injects their touches, and only a clean review clears it', () => {
+  const root = workspace();
+  run(root, ['init']);
+  writeFileSync(join(root, '.skeinn', 'PROJECT.md'), PROJ('A silent-drift fixture proving five delivery Tasks with unchanged declarations ring the checkpoint watchdog and only a clean review resets it.'), 'utf8');
+  run(root, ['design', 'add', 'core-sys', '--title', 'Core system', '--kind', 'system']);
+  writeFileSync(join(root, '.skeinn', 'design', 'core-sys.md'), '# Core system\n\n- Kind: system\n- Status: ready\n\n## Responsibility\nEverything.\n\n## Alternatives considered\nA vs B.\n', 'utf8');
+  run(root, ['capability', 'exempt', '--reason', 'Fixture verifies silent-drift watchdog; no specialist domain applies.']);
+  json(root, 'tasks.json', { tasks: [1, 2, 3, 4, 5].map((n) => ({
+    title: `Slice ${n}`, outcome: `Slice ${n} output exists on disk`, done_when: [`s${n} ok`], boundaries: [`s${n} only`],
+    ...(n > 1 ? { depends_on: [`TASK-00${n - 1}`] } : {}),
+    reads: ['.skeinn/PROJECT.md', '.skeinn/design/core-sys.md'], touches: [`s${n}.txt`], implements: '.skeinn/design/core-sys.md#Responsibility',
+  })) });
+  run(root, ['task', 'plan', '--json-file', 'tasks.json']);
+  const ready = JSON.parse(run(root, ['project', 'ready']));
+  json(root, 'kpass.json', { run_id: 'drift-launch-001', prepared_digest: ready.digest, verdict: 'passed', summary: 'Launch ready.', evidence: ['Horizon ok.'], review: independentReview('fresh-drift-agent') });
+  run(root, ['keeper', 'record', '--json-file', 'kpass.json']);
+  for (let n = 1; n <= 5; n += 1) {
+    run(root, ['task', 'start', `TASK-00${n}`]);
+    writeFileSync(join(root, `s${n}.txt`), 'done', 'utf8');
+    run(root, ['task', 'done', `TASK-00${n}`, '--json-file', json(root, `d${n}.json`, { evidence: [`s${n} ok`], checks: [{ criterion: `s${n} ok`, evidence: [`s${n}.txt exists`] }] })]);
+  }
+  const warnings = JSON.parse(run(root, ['check'])).warnings.join('\n');
+  assert(warnings.includes('silent spec-to-code drift') && warnings.includes('TASK-005'), 'check must warn about silent drift after 5 delivery tasks');
+  const normalCtx = run(root, ['context']);
+  assert(normalCtx.includes('Silent-drift watch'), 'normal context must surface the silent-drift watch line');
+  const cpCtx = run(root, ['context', '--checkpoint']);
+  assert(cpCtx.includes('TASK-005') && cpCtx.includes('s5.txt'), 'checkpoint context must list recent delivery Tasks even when dirty is empty');
+  const cpPrompt = run(root, ['keeper', 'checkpoint', 'prompt']);
+  assert(cpPrompt.includes('TASK-005') && cpPrompt.includes('s5.txt'), 'checkpoint prompt must list recent delivery tasks with their touches');
+  json(root, 'chkdrift.json', { run_id: 'chk-drift-001', verdict: 'drift_detected', summary: 'Found drift in slice 4.', evidence: ['Diffed s4.'], review: independentReview('fresh-chk-drift') });
+  run(root, ['keeper', 'checkpoint', 'record', '--json-file', 'chkdrift.json']);
+  const still = JSON.parse(run(root, ['check'])).warnings.join('\n');
+  assert(still.includes('silent spec-to-code drift'), 'drift_detected checkpoint must NOT clear the watchdog');
+  json(root, 'chkclean.json', { run_id: 'chk-clean-001', verdict: 'clean', summary: 'Re-verified recent work.', evidence: ['Re-ran checks.'], review: independentReview('fresh-chk-clean') });
+  run(root, ['keeper', 'checkpoint', 'record', '--json-file', 'chkclean.json']);
+  const cleared = JSON.parse(run(root, ['check'])).warnings.join('\n');
+  assert(!cleared.includes('silent spec-to-code drift'), 'clean checkpoint must reset the silent-drift baseline');
+});
+
+test('delivery Tasks cannot depend_on a spike (rejected at both plan and update)', () => {
+  const root = workspace();
+  run(root, ['init']);
+  writeFileSync(join(root, '.skeinn', 'PROJECT.md'), PROJ('A spike-DAG fixture proving delivery Tasks cannot wire a spike into the dependency graph.'), 'utf8');
+  // plan: delivery depends_on spike -> reject
+  json(root, 'bad-plan.json', { tasks: [
+    { title: 'Probe quota', kind: 'spike', outcome: 'Measured actual storage quota on device', acceptance: [{ criterion: 'spike.txt exists', verify_by: 'file exists', evidence: '' }], boundaries: ['probe only'], reads: ['.skeinn/PROJECT.md'], touches: ['spike.txt'] },
+    { title: 'Build feature', outcome: 'Feature built and verified on disk', acceptance: [{ criterion: 'feat.js exists', verify_by: 'file exists', evidence: '' }], boundaries: ['feature only'], depends_on: ['TASK-001'], reads: ['.skeinn/PROJECT.md'], touches: ['feat.js'] },
+  ] });
+  assert(run(root, ['task', 'plan', '--json-file', 'bad-plan.json'], 1).includes('cannot depend on spike'), 'delivery depending on spike must be rejected at plan');
+  // spike depends_on spike is allowed, plus a standalone delivery Task
+  json(root, 'ok-plan.json', { tasks: [
+    { title: 'Probe quota', kind: 'spike', outcome: 'Measured actual storage quota on device', acceptance: [{ criterion: 'spike.txt exists', verify_by: 'file exists', evidence: '' }], boundaries: ['probe only'], reads: ['.skeinn/PROJECT.md'], touches: ['spike.txt'] },
+    { title: 'Probe latency', kind: 'spike', outcome: 'Measured actual API latency on device', acceptance: [{ criterion: 'lat.txt exists', verify_by: 'file exists', evidence: '' }], boundaries: ['probe only'], depends_on: ['TASK-001'], reads: ['.skeinn/PROJECT.md'], touches: ['lat.txt'] },
+    { title: 'Build feature', outcome: 'Feature built and verified on disk', acceptance: [{ criterion: 'feat.js exists', verify_by: 'file exists', evidence: '' }], boundaries: ['feature only'], reads: ['.skeinn/PROJECT.md'], touches: ['feat.js'] },
+  ] });
+  run(root, ['task', 'plan', '--json-file', 'ok-plan.json']);
+  // update: retro-fit the delivery Task's depends_on onto a spike -> rejected at update as well
+  json(root, 'upd.json', { depends_on: ['TASK-001'] });
+  assert(run(root, ['task', 'update', 'TASK-003', '--json-file', 'upd.json'], 1).includes('cannot depend on spike'), 'task update must reject wiring a delivery Task onto a spike');
 });
 
 for (const root of roots) rmSync(root, { recursive: true, force: true });

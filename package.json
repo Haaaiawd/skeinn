@@ -1,6 +1,6 @@
 {
   "name": "@haaaiawd/skeinn",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "description": "Skeinn — Spec-driven continuity, proof, and project understanding infrastructure for AI coding agents",
   "type": "module",
   "bin": {

@@ -120,17 +120,44 @@ authority, risk, or material cost changes return to the conversation.
 New Tasks must make design and capability applicability explicit: use `implements` and `capability_hooks`, or
 record a concrete `design_exemption` / `capability_exemption`. Task start rejects an unclassified active horizon.
 Completion verifies that every declared local `touches` path exists, and `skeinn check` detects later filesystem drift.
+A Task may carry `kind: "spike"` for empirical probes that run during `shaping` (no `implements` required); spikes
+produce measured facts, never deliverables, so a delivery Task cannot `depends_on` a spike — distill its findings
+into Design/Capability or `skeinn record` instead. Keeper findings pin to a `scope` (a Task id, a `.skeinn/` doc
+path, or `project`); `task start` automatically surfaces every open finding pinned to that Task or to the docs in
+its `reads`/`implements`, gating on `blocking` and listing `minor` items as advisories to close with evidence.
 
-### One-time Keeper
+### Launch Keeper and in-flight checkpoints
 
-Keeper is not a recurring role. It is a single isolation test at the transition from shaping to material
-execution. A fresh Agent receives no prior conversation, runs `skeinn context --keeper`, explains the whole,
-selects a first Task, navigates its design documents and professional capabilities, and identifies concrete evidence. Every attempt binds a unique
+Keeper runs in two shapes, both built on two primitives: a per-artifact `reviewed_digests` hash map (PROJECT,
+STRUCTURE, DECISIONS, every design doc, every capability file, every Task definition) and a scope-pinned
+`findings` ledger. The **active horizon** — currently executable Tasks plus their 1–2 hop unblocked successors and
+the `.skeinn` documents they read or implement — defines what deserves blocking scrutiny; `dirty` artifacts are
+horizon members whose current digest differs from their last reviewed digest.
+
+**Launch** is a one-time birth certificate at the shaping→building transition. A fresh Agent receives no prior
+conversation, runs `skeinn context --keeper`, explains the whole, selects a first Task, navigates its design
+documents and professional capabilities, and identifies concrete evidence. Every attempt binds a unique
 fresh-thread `run_id` to the digest frozen by `project ready`. A passing record also carries an explicit independent
 review attestation (`review.mode`, reviewer identity, and isolation evidence); known self-review cannot be recorded as
-passed. This is an auditable host assertion, not cryptographic identity proof. It may return gaps; summary, evidence and exact gaps
-are injected into the main Agent's next context. Revision must change project truth or Task definitions before a
-new digest and fresh Keeper run are allowed. Once passed, normal Task evidence replaces further Keeper ceremony.
+passed. This is an auditable host assertion, not cryptographic identity proof. Blocking findings inside the horizon
+return `needs_revision`; minor-only results pass as `passed_with_advisories`, stamping the horizon into
+`reviewed_digests` and pinning each finding to its scope instead of forcing another full round. Revision must change
+project truth or Task definitions before a new digest and fresh Keeper run are allowed — and round 2+ is a
+scope-bounded delta re-check: the Keeper sees only unclosed blocking findings plus the artifacts changed by the
+repair, out-of-scope observations demote to advisories, and two consecutive rounds that fail to reduce blocking
+count halt blind looping (unlockable with `--force-round --reason`). After Launch passes, `launch_completed` stays
+permanent; a genuine direction pivot uses `skeinn keeper reset --reason`, which clears `reviewed_digests` and logs a
+decision.
+
+**Checkpoints** are the continuing legitimacy mechanism during `building` — not a recurring full review. They fire
+on `dirty` horizon artifacts (designs edited mid-flight via `decision`, or distant documents whose Tasks just
+entered the horizon and were never reviewed), and are surfaced by `skeinn check` when the set is non-empty; as a
+fallback, completing five delivery Tasks since the last clean review raises a silent-drift watch even when no
+declaration changed. `skeinn keeper checkpoint prompt` hands a fresh Agent only the incremental slice — dirty
+artifacts, open findings, and the recent delivery Tasks whose `touches` should be diffed against spec — for three
+jobs: spec-to-code drift reconcile (fix the code or record `skeinn decision`, never silent), newly-entering horizon
+verification, and evidence/advisory closure. A `clean` verdict commits the horizon into `reviewed_digests` and
+advances the drift watermark; `drift_detected` does not.
 
 If the host lacks subagents, Skeinn supplies a one-sentence prompt for a new window. Explicit skip is possible
 but must preserve a concrete reason and reduced confidence.

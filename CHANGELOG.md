@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.5.0
+
+- Redesigned Keeper around **two minimal primitives** (`reviewed_digests` per-artifact hash map + unified `scope`-pinned `findings` ledger) and exact topological horizon calculation (`activeHorizon(depth=2)`):
+  - **`passed_with_advisories`**: Minor-only items no longer force another full Keeper round; they pass Launch immediately and pin to their `TASK-ID` or `.skeinn/design/<doc>.md` scope.
+  - **Automatic `task start` surfacing & gating**: Starting any Task automatically surfaces all open findings pinned to that Task OR its `reads`/`implements` docs (blocking severity gates start until resolved via `skeinn keeper resolve <FND-ID> --evidence "<proof>"`; minor severity surfaces as an active advisory).
+  - **Scope-bounded Delta Re-check (Round 2+)**: Follow-up Keeper rounds automatically inject only `dirty` modified artifacts and open blocking findings rather than the full corpus, eliminating fresh-eyes nitpicking spirals.
+  - **Non-convergence (`>=`) ping-pong guard**: If blocking findings fail to strictly decrease across two consecutive rounds, `skeinn project ready` halts blind looping without dumping internal chores on the human (unlockable via `--force-round --reason`).
+  - **In-Flight Checkpoints & Late-Entering Horizon Review**: Launch pass is a one-time birth certificate (`launch_completed`); distant design docs entering the horizon or designs updated mid-flight via `decision` automatically appear as `dirty` for lightweight `skeinn keeper checkpoint prompt|record` and `skeinn context --checkpoint`.
+  - **Empirical Spike tasks (`kind: "spike"`)**: Can start in `shaping` before Launch without `implements` to resolve physical/empirical unknowns with real evidence. Delivery Tasks cannot `depends_on` a spike (enforced in `validateTasks`, covering both `task plan` and `task update`) — distill findings into Design/Capability or `skeinn record` instead.
+  - **Silent-drift watchdog**: Completing 5 delivery Tasks since the last clean review/checkpoint raises a warning in `skeinn check` and a watch line in `skeinn context` — derived purely from timestamps, no new state; `drift_detected` verdicts deliberately do not reset it, only `clean` does. Checkpoint prompt/context inject the recent delivery Tasks' `touches` so an empty `dirty` set never leaves the reviewer a blank page.
+  - **Relaunch escape hatch**: `skeinn keeper reset --reason <text>` clears `reviewed_digests` and logs a decision for genuine full-direction pivots.
+
 ## 2.4.0
 
 - Upgraded Evil Eval (`skeinn eval scaffold`) to a 3-tier budget-aware pyramid (`probe` ¥2–5, default 3-baton zero-memory `relay` ~¥20, and `full`), adding per-baton prompts, `hidden-oracle.mjs`, `telemetry-template.json`, and Pairwise Forced-Choice (`X_CLEAR_WIN | TIE | Y_CLEAR_WIN`) blind judging.
