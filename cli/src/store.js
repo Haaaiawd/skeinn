@@ -5,6 +5,7 @@ import {
   readFileSync,
   readdirSync,
   renameSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from 'node:fs';
@@ -13,6 +14,7 @@ import { createHash } from 'node:crypto';
 import {
   analyzeReviewWindow,
   deriveTaskActualTouches,
+  getGitUserIdentity,
   inspectGitRepo,
   normalizeGitPath,
   snapshotReviewAnchor,
@@ -56,9 +58,69 @@ function readJson(path, label = basename(path)) {
 }
 
 function atomicJson(path, value) {
-  const temp = `${path}.tmp-${process.pid}`;
+  const temp = `${path}.tmp-${process.pid}-${Date.now()}`;
   writeFileSync(temp, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
   renameSync(temp, path);
+}
+
+const LOCK_SLEEP_BUF = new Int32Array(new SharedArrayBuffer(4));
+function sleepSync(ms) {
+  Atomics.wait(LOCK_SLEEP_BUF, 0, 0, ms);
+}
+
+function isPidAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return err.code === 'EPERM';
+  }
+}
+
+export function withStateLock(skeinnDir, fn, { timeoutMs = 5000, staleMs = 30000 } = {}) {
+  mkdirSync(skeinnDir, { recursive: true });
+  const lockDir = join(skeinnDir, '.lock');
+  const ownerFile = join(lockDir, 'owner.json');
+  const deadline = Date.now() + timeoutMs;
+  let acquired = false;
+
+  while (!acquired) {
+    try {
+      mkdirSync(lockDir);
+      writeFileSync(ownerFile, JSON.stringify({ pid: process.pid, at: now() }), 'utf8');
+      acquired = true;
+    } catch (err) {
+      if (err.code !== 'EEXIST') throw err;
+      let stale = false;
+      try {
+        if (existsSync(ownerFile)) {
+          const info = JSON.parse(readFileSync(ownerFile, 'utf8'));
+          const age = Date.now() - Date.parse(info.at || '');
+          if ((Number.isFinite(age) && age > staleMs) || !isPidAlive(info.pid)) stale = true;
+        } else {
+          const age = Date.now() - statSync(lockDir).mtimeMs;
+          if (age > 2000) stale = true;
+        }
+      } catch {
+        stale = true;
+      }
+      if (stale) {
+        try { rmSync(lockDir, { recursive: true, force: true }); } catch {}
+        continue;
+      }
+      if (Date.now() >= deadline) {
+        throw new Error(`Timed out waiting for Skeinn state lock at ${lockDir}`);
+      }
+      sleepSync(20 + Math.floor(Math.random() * 40));
+    }
+  }
+
+  try {
+    return fn();
+  } finally {
+    try { rmSync(lockDir, { recursive: true, force: true }); } catch {}
+  }
 }
 
 function nextId(items, prefix) {
@@ -75,11 +137,35 @@ function asObjects(values, key) {
   return values.map((value) => typeof value === 'string' ? { [key]: value } : value);
 }
 
+function readStatePointer(root) {
+  const pointerPath = join(root, '.skeinn-state');
+  if (!existsSync(pointerPath)) return null;
+  const raw = readFileSync(pointerPath, 'utf8').split(/\r?\n/).map((l) => l.trim()).find(Boolean) || '';
+  if (!raw) throw new Error(`Pointer .skeinn-state in ${root} is empty and unresolvable`);
+  const target = isAbsolute(raw) ? resolve(raw) : resolve(root, raw);
+  if (!existsSync(join(target, 'state.json'))) {
+    throw new Error(`Pointer .skeinn-state is unresolvable: "${raw}" -> "${target}" does not contain state.json`);
+  }
+  return { pointerPath, raw, target };
+}
+
+function writeStatePointer(root, skeinnDir) {
+  const pointerPath = join(root, '.skeinn-state');
+  const rel = relative(root, skeinnDir);
+  const value = rel && !isAbsolute(rel) ? rel.replaceAll('\\', '/') : skeinnDir;
+  writeFileSync(pointerPath, `${value}\n`, 'utf8');
+  return value;
+}
+
 export function findRoot(from = process.cwd()) {
   if (runtimePaths && existsSync(runtimePaths.state)) return runtimePaths.root;
   let cursor = resolve(from);
   while (true) {
     if (existsSync(join(cursor, '.skeinn', 'state.json'))) return cursor;
+    if (existsSync(join(cursor, '.skeinn-state'))) {
+      readStatePointer(cursor);
+      return cursor;
+    }
     if (existsSync(join(cursor, '.loom', 'state.json'))) {
       throw new Error('Found a legacy .loom/ project. Rename .loom/ to .skeinn/, update any .loom/ paths in tasks.json and AGENTS.md, then run skeinn check.');
     }
@@ -97,10 +183,17 @@ export function findRoot(from = process.cwd()) {
 export function skeinnPaths(root = findRoot()) {
   const absolute = resolve(root);
   if (runtimePaths?.root === absolute) return runtimePaths;
+  // Priority 1: Embedded .skeinn/ ALWAYS beats .skeinn-state pointer
   const localSkeinn = join(absolute, '.skeinn');
   if (existsSync(join(localSkeinn, 'state.json'))) {
     return skeinnPathsShape(absolute, localSkeinn, 'local');
   }
+  // Priority 2: .skeinn-state pointer file
+  const pointer = readStatePointer(absolute);
+  if (pointer) {
+    return skeinnPathsShape(absolute, pointer.target, 'pointer', pointer.raw);
+  }
+  // Priority 3: Linked git worktree auto-shared main worktree .skeinn/
   const gitInfo = inspectGitRepo(absolute);
   if (gitInfo.isGit && gitInfo.isLinkedWorktree) {
     const sharedSkeinn = join(gitInfo.mainWorktree, '.skeinn');
@@ -160,12 +253,22 @@ export function initProject(root = process.cwd(), options = {}) {
   writeFileSync(paths.project, PROJECT_TEMPLATE, 'utf8');
   writeFileSync(paths.structure, STRUCTURE_TEMPLATE, 'utf8');
   writeFileSync(paths.decisions, '# Decision History\n\nCurrent truth belongs in PROJECT.md and linked design documents. This file preserves consequential superseding decisions.\n', 'utf8');
-  const anchored = paths.skeinn === join(paths.root, '.skeinn');
-  if (anchored) installAgentAnchor(paths.root, { refresh: Boolean(options.refreshAgents) });
+  const isSidecar = paths.skeinn !== join(paths.root, '.skeinn');
+  const writeAnchor = !options.noAnchor;
+  let pointerWritten = false;
+  if (writeAnchor) {
+    if (isSidecar) {
+      writeStatePointer(paths.root, paths.skeinn);
+      pointerWritten = true;
+    }
+    installAgentAnchor(paths.root, { refresh: Boolean(options.refreshAgents) });
+  }
+  const gitInfo = inspectGitRepo(paths.root);
   return {
     initialized: true,
     root: paths.root,
-    files: ['.skeinn/PROJECT.md', '.skeinn/STRUCTURE.md', '.skeinn/DECISIONS.md', '.skeinn/state.json', '.skeinn/tasks.json', '.skeinn/deliverables.json', '.skeinn/design/', '.skeinn/capabilities/', ...(anchored ? ['AGENTS.md'] : [])],
+    ...(gitInfo.isGit ? {} : { warning: 'Non-git workspace: reality-derived diff & heavy gate are inactive (run git init to enable).' }),
+    files: ['.skeinn/PROJECT.md', '.skeinn/STRUCTURE.md', '.skeinn/DECISIONS.md', '.skeinn/state.json', '.skeinn/tasks.json', '.skeinn/deliverables.json', '.skeinn/design/', '.skeinn/capabilities/', ...(pointerWritten ? ['.skeinn-state'] : []), ...(writeAnchor ? ['AGENTS.md'] : [])],
     next: 'Replace the template text in .skeinn/PROJECT.md and .skeinn/STRUCTURE.md with this project\u2019s truth, then shape the whole: skeinn record \u2192 iterate core Design surfaces (skeinn design add) and 1\u20133 bottleneck Capabilities (skeinn capability add, or skeinn capability exempt --reason) \u2192 skeinn deliverable add \u2192 skeinn task plan. Run `skeinn help shaping` for what each layer buys you.',
   };
 }
@@ -176,11 +279,12 @@ function skeinnPathsForInit(root) {
   return skeinnPathsShape(absolute, skeinn, runtimePaths?.root === absolute ? 'explicit' : 'local');
 }
 
-function skeinnPathsShape(root, skeinn, stateMode = 'local') {
+function skeinnPathsShape(root, skeinn, stateMode = 'local', pointerTarget = null) {
   return {
     root,
     skeinn,
     state_mode: stateMode,
+    pointer_target: pointerTarget,
     state: join(skeinn, 'state.json'),
     tasks: join(skeinn, 'tasks.json'),
     deliverables: join(skeinn, 'deliverables.json'),
@@ -243,6 +347,8 @@ function ensureKeeperState(state) {
   if (state.keeper.last_reviewed_commit === undefined) state.keeper.last_reviewed_commit = null;
   if (!state.keeper.last_reviewed_worktree || typeof state.keeper.last_reviewed_worktree !== 'object') state.keeper.last_reviewed_worktree = {};
   if (state.keeper.last_reviewed_at === undefined) state.keeper.last_reviewed_at = null;
+  if (typeof state.keeper.launch_epoch !== 'number') state.keeper.launch_epoch = 1;
+  if (!Array.isArray(state.keeper.reset_history)) state.keeper.reset_history = [];
   if (!Array.isArray(state.decision_events)) state.decision_events = [];
   return state.keeper;
 }
@@ -1197,6 +1303,8 @@ function checkLockViolations(actualTouches, locks) {
 }
 
 export function focusTask(id, options = {}, root = findRoot()) {
+  const lockDir = skeinnPaths(root).skeinn;
+  return withStateLock(lockDir, () => {
   const { paths, state, taskStore } = loadProject(root);
   const gitInfo = inspectGitRepo(paths.root);
   const lane = options.lane || gitInfo.lane || 'default';
@@ -1236,9 +1344,14 @@ export function focusTask(id, options = {}, root = findRoot()) {
       ? `This Task has ${advisories.length} pinned advisory item(s) — address them during implementation and close via skeinn keeper resolve <id> --evidence "<proof>". Run skeinn context before editing.`
       : 'Run skeinn context to load the Task, guardrails, and reads before editing.',
   };
+  });
 }
 
+const TRIVIAL_EVIDENCE_RE = /^(done|ok|okay|pass|passed|fixed|works|working|lgtm|completed|finished|yes|tested|good|verified)\.?$/i;
+
 export function closeTask(id, payload, root = findRoot()) {
+  const lockDir = skeinnPaths(root).skeinn;
+  return withStateLock(lockDir, () => {
   const { paths, state, taskStore } = loadProject(root);
   const task = taskStore.tasks.find((item) => item.id === id);
   if (!task) throw new Error(`Task not found: ${id}`);
@@ -1258,7 +1371,7 @@ export function closeTask(id, payload, root = findRoot()) {
   // Exact Heavy Window Gate Predicate:
   // Refuse close iff windowHeavy && no clean checkpoint since anchor && no covering decision since anchor
   const dirtyDesigns = dirtyDesignDocsInHorizon(paths, state, taskStore.tasks);
-  const reviewWindow = analyzeReviewWindow(paths.root, state.keeper, taskStore.tasks, { dirtyDesignDocs: dirtyDesigns });
+  const reviewWindow = analyzeReviewWindow(paths.root, state.keeper, taskStore.tasks, { dirtyDesignDocs: dirtyDesigns, thresholds: state.project?.review_gate || {} });
   const isSpike = task.kind === 'spike';
   const windowHeavy = reviewWindow.level === 'heavy';
   const hasCleanSinceAnchor = false;
@@ -1271,7 +1384,9 @@ export function closeTask(id, payload, root = findRoot()) {
   let normalizedPayload = payload || {};
   if (typeof normalizedPayload.evidence_line === 'string' && normalizedPayload.evidence_line.trim()) {
     const line = normalizedPayload.evidence_line.trim();
-    if (line.length < 5) throw new Error('--evidence requires concrete proof (at least 5 characters)');
+    if (line.length < 12 || TRIVIAL_EVIDENCE_RE.test(line)) {
+      throw new Error('--evidence requires concrete verifiable proof (at least 12 characters naming what was checked or observed, not generic filler like "done" or "passed")');
+    }
     normalizedPayload = {
       evidence: [line],
       acceptance_results: (task.acceptance || []).map((acc) => ({ criterion: acc.criterion, evidence: line })),
@@ -1343,6 +1458,7 @@ export function closeTask(id, payload, root = findRoot()) {
     review_window: { level: reviewWindow.level, files: reviewWindow.files.length, lines_changed: reviewWindow.lines_changed, anchor_status: reviewWindow.anchor_status },
     ...(lockViolations.length ? { warning: `actual_touches exceeded declared locks: ${lockViolations.join(', ')}` } : {}),
   };
+  });
 }
 
 export function markReady(root = findRoot(), options = {}) {
@@ -1521,6 +1637,7 @@ export function recordKeeper(payload, root = findRoot()) {
     review: payload.review || { mode: 'unverified', reviewer_id: '', evidence: '' },
     can_auto_pass: false,
     closure_results: payload.closure_results || [],
+    epoch: state.keeper.launch_epoch || 1,
     at: now(),
   };
   state.keeper.attempts.push(attempt);
@@ -1588,15 +1705,22 @@ export function resolveFinding(id, options = {}, root = findRoot()) {
 
 export function resetKeeper(reason, root = findRoot()) {
   if (!reason || reason.trim().length < 10) throw new Error('Resetting Keeper requires a concrete --reason (at least 10 characters)');
-  const { paths, state } = loadProject(root);
-  state.keeper.reviewed_digests = {};
-  state.keeper.launch_completed = false;
-  state.keeper.status = 'not_run';
-  state.project.status = 'shaping';
-  state.project.updated_at = now();
-  atomicJson(paths.state, state);
+  const lockDir = skeinnPaths(root).skeinn;
+  const res = withStateLock(lockDir, () => {
+    const { paths, state } = loadProject(root);
+    const ts = now();
+    state.keeper.reset_history.push({ at: ts, epoch: state.keeper.launch_epoch || 1, launch_was_completed: Boolean(state.keeper.launch_completed), reason: reason.trim() });
+    state.keeper.launch_epoch = (state.keeper.launch_epoch || 1) + 1;
+    state.keeper.reviewed_digests = {};
+    state.keeper.launch_completed = false;
+    state.keeper.status = 'not_run';
+    state.project.status = 'shaping';
+    state.project.updated_at = ts;
+    atomicJson(paths.state, state);
+    return { reset: true, epoch: state.keeper.launch_epoch, reason: reason.trim(), next: 'Shape the revised direction, then run skeinn project ready for a fresh Launch Keeper review.' };
+  });
   recordDecision({ summary: `Keeper relaunch reset: ${reason.trim()}`, changes: ['.skeinn/state.json'] }, root);
-  return { reset: true, reason: reason.trim(), next: 'Shape the revised direction, then run skeinn project ready for a fresh Launch Keeper review.' };
+  return res;
 }
 
 export function getCheckpointPrompt(options = {}, root = findRoot()) {
@@ -1661,6 +1785,7 @@ export function recordCheckpoint(payload, root = findRoot()) {
     review: payload.review,
     evidence: payload.evidence,
     snapshot_digest: overallDigest(currentDigests),
+    epoch: state.keeper.launch_epoch || 1,
     at: now(),
   };
   state.keeper.checkpoints.push(record);
@@ -1859,7 +1984,7 @@ export function compileContext(options = {}, root = findRoot()) {
       ? `exempted (${state.capability_exemption.reason})`
       : 'none';
   const dirtyDesigns = dirtyDesignDocsInHorizon(paths, state, taskStore.tasks);
-  const reviewWindow = analyzeReviewWindow(paths.root, state.keeper, taskStore.tasks, { dirtyDesignDocs: dirtyDesigns });
+  const reviewWindow = analyzeReviewWindow(paths.root, state.keeper, taskStore.tasks, { dirtyDesignDocs: dirtyDesigns, thresholds: state.project?.review_gate || {} });
   const recentDone = completedDeliveryTasksSinceLastReview(state, taskStore.tasks);
   const sentinelReasons = [];
   if (state.keeper.launch_completed && recentDone.length >= 5) sentinelReasons.push(`${recentDone.length} delivery tasks closed since last clean review`);
@@ -1874,7 +1999,8 @@ export function compileContext(options = {}, root = findRoot()) {
   const activeDisplay = Object.keys(summary.active_by_lane || {}).length
     ? Object.entries(summary.active_by_lane).map(([l, tid]) => `${tid} (lane: ${l})`).join(', ')
     : 'none';
-  const statusBlock = `## Current Skeinn state and recommended action\n\n- State source: ${paths.skeinn} (${paths.state_mode}) | Repo: ${paths.root} (lane: ${lane})\n- Project status: ${state.project.status}\n- Focused task(s): ${activeDisplay}\n- Work map: ${summary.total} total, ${summary.open} open, ${summary.done} done, ${summary.blocked} blocked\n${blockedLine}- Design documents: ${designs.length}\n- Capability files: ${capStatusLine}\n- Keeper status: ${state.keeper.status}\n${reviewWindowLine}\n${sentinelLine}\n- Clarification round: ${clarify.active ? `OPEN — ${clarify.reason} (${clarify.rounds.length} recorded)` : 'none'}\n\n**Recommended next action:** ${recommendation}\n\nThis is a recommendation, not a script. Use your judgment; if you choose differently, record the reason in \`.skeinn/DECISIONS.md\` or Task evidence.${options.keeper || options.full ? '' : '\n\nNeed the full runtime protocol (first entry or after a context reset)? Run skeinn context --full.'}`;
+  const pointerBannerLine = paths.state_mode === 'pointer' ? `\n- State pointer: via .skeinn-state (${paths.pointer_target})` : '';
+  const statusBlock = `## Current Skeinn state and recommended action\n\n- State source: ${paths.skeinn} (${paths.state_mode}) | Repo: ${paths.root} (lane: ${lane})${pointerBannerLine}\n- Project status: ${state.project.status}\n- Focused task(s): ${activeDisplay}\n- Work map: ${summary.total} total, ${summary.open} open, ${summary.done} done, ${summary.blocked} blocked\n${blockedLine}- Design documents: ${designs.length}\n- Capability files: ${capStatusLine}\n- Keeper status: ${state.keeper.status}\n${reviewWindowLine}\n${sentinelLine}\n- Clarification round: ${clarify.active ? `OPEN — ${clarify.reason} (${clarify.rounds.length} recorded)` : 'none'}\n\n**Recommended next action:** ${recommendation}\n\nThis is a recommendation, not a script. Use your judgment; if you choose differently, record the reason in \`.skeinn/DECISIONS.md\` or Task evidence.${options.keeper || options.full ? '' : '\n\nNeed the full runtime protocol (first entry or after a context reset)? Run skeinn context --full.'}`;
   const blocks = [statusBlock];
   if (options.full || options.keeper) blocks.push(agentProtocol({ humanChannel: options.humanChannel || 'available' }));
   blocks.push(shapingContext({ state, taskSummary: summary, capabilityNames: capabilityStates, designNames: designs, forKeeper: Boolean(options.keeper) }));
@@ -2114,9 +2240,107 @@ export function checkProject(root = findRoot()) {
     }
   }
 
+  // Pointer protection & precedence sentinel (.skeinn-state)
+  const pointerFile = join(paths.root, '.skeinn-state');
+  if (existsSync(pointerFile)) {
+    if (existsSync(join(paths.root, '.skeinn', 'state.json'))) {
+      warnings.push('Both embedded .skeinn/ and .skeinn-state exist; using embedded .skeinn/ (embedded takes precedence)');
+    } else {
+      try {
+        const ptr = readStatePointer(paths.root);
+        if (!existsSync(join(ptr.target, 'tasks.json'))) {
+          errors.push(`Pointer .skeinn-state target is missing tasks.json: ${ptr.target}`);
+        }
+        const ptrMtime = statSync(pointerFile).mtimeMs;
+        const stateMtime = statSync(paths.state).mtimeMs;
+        if (ptrMtime > stateMtime + 1000) {
+          warnings.push('Pointer .skeinn-state is newer than state.json — verify pointer was not redirected');
+        }
+        if (taskStore.tasks.length === 0 && state.understanding.confirmed.length === 0) {
+          warnings.push('Pointer .skeinn-state targets an empty ledger (0 tasks, 0 confirmed facts)');
+        }
+      } catch (err) {
+        errors.push(err.message);
+      }
+    }
+  }
+
+  // Audit integrity sentinels: same-epoch reviewer_id reuse / git committer match + reset abuse
+  const currentEpoch = state.keeper.launch_epoch || 1;
+  const gitUser = getGitUserIdentity(paths.root);
+  const committerTokens = [gitUser.name, gitUser.email].map((s) => (s || '').trim().toLowerCase()).filter((s) => s.length >= 3);
+  const epochReviews = [
+    ...(state.keeper.attempts || []).filter((a) => (a.epoch || 1) === currentEpoch && a.review?.mode === 'independent'),
+    ...(state.keeper.checkpoints || []).filter((c) => (c.epoch || 1) === currentEpoch && c.review?.mode === 'independent'),
+  ];
+  const seenReviewerIds = new Map();
+  for (const rev of epochReviews) {
+    const rid = (rev.review?.reviewer_id || '').trim();
+    if (!rid) continue;
+    const count = (seenReviewerIds.get(rid) || 0) + 1;
+    seenReviewerIds.set(rid, count);
+    const ridLower = rid.toLowerCase();
+    if (committerTokens.some((tok) => ridLower === tok || ridLower.includes(tok))) {
+      warnings.push(`Audit integrity warning: reviewer_id "${rid}" matches git committer identity`);
+    }
+  }
+  for (const [rid, count] of seenReviewerIds.entries()) {
+    if (count >= 2) {
+      warnings.push(`Audit integrity warning: reviewer_id "${rid}" was reused ${count} times within launch epoch ${currentEpoch}`);
+    }
+  }
+
+  const resets = state.keeper.reset_history || [];
+  if (resets.length >= 2) {
+    const lastTwo = resets.slice(-2);
+    if (!lastTwo[0].launch_was_completed && !lastTwo[1].launch_was_completed) {
+      warnings.push('Audit integrity warning: repeated keeper reset detected within the same uncompleted launch');
+    }
+  }
+  if (resets.length) {
+    const lastResetMs = Date.parse(resets.at(-1).at || '');
+    if (Number.isFinite(lastResetMs)) {
+      const rapidClose = taskStore.tasks.find((t) => t.status === 'done' && (t.kind || 'delivery') === 'delivery' && Date.parse(t.completed_at || '') >= lastResetMs && (Date.parse(t.completed_at || '') - lastResetMs) <= 10 * 60 * 1000);
+      if (rapidClose) {
+        warnings.push(`Audit integrity warning: delivery Task ${rapidClose.id} was closed within 10 minutes after keeper reset`);
+      }
+      // Broader disarm-window sentinel: ANY delivery close after the last reset while the
+      // launch gate is still disarmed (launch_completed false) is suspect, not just <10min.
+      if (!state.keeper.launch_completed) {
+        const closedDuringDisarm = taskStore.tasks.filter(
+          (t) => t.status === 'done' && Date.parse(t.completed_at || '') >= lastResetMs,
+        );
+        if (closedDuringDisarm.length) {
+          warnings.push(`${closedDuringDisarm.length} task(s) closed while the heavy-review gate was disarmed after a keeper reset (${closedDuringDisarm.map((t) => t.id).join(', ')}) — Launch has not been re-run`);
+        }
+      }
+    }
+  }
+
+  // Ledger-integrity sentinels: forged/damaged ledger fingerprints (direct .skeinn/ edits)
+  for (const task of taskStore.tasks) {
+    if (task.status === 'done' && !task.completed_at) {
+      warnings.push(`${task.id} is marked done without close metadata (no completed_at) — possible direct ledger edit; audit .skeinn/tasks.json or skeinn task reopen`);
+    }
+  }
+  const fndNums = state.keeper.findings
+    .map((f) => /^FND-(\d+)$/.exec(f.id || '')?.[1])
+    .filter(Boolean)
+    .map(Number);
+  const recordedFindings = (state.keeper.checkpoints || []).reduce((sum, c) => sum + (c.findings_added || 0), 0)
+    + (state.keeper.attempts || []).reduce((sum, a) => sum + (a.findings_added || 0), 0);
+  if (fndNums.length && Math.max(...fndNums) > fndNums.length) {
+    warnings.push(`Findings ledger has sequence gaps (max FND-${String(Math.max(...fndNums)).padStart(3, '0')}, ${fndNums.length} entries) — possible direct ledger edit`);
+  } else if (!fndNums.length && recordedFindings > 0) {
+    warnings.push(`Findings ledger is empty but ${recordedFindings} finding(s) were recorded in reviews — possible direct ledger edit`);
+  }
+
   // Orthogonal 3-Sentinel Checks (silent-drift count + physical review window + stale active task)
   const dirtyDesigns = dirtyDesignDocsInHorizon(paths, state, taskStore.tasks);
-  const reviewWindow = analyzeReviewWindow(paths.root, state.keeper, taskStore.tasks, { dirtyDesignDocs: dirtyDesigns });
+  const reviewWindow = analyzeReviewWindow(paths.root, state.keeper, taskStore.tasks, { dirtyDesignDocs: dirtyDesigns, thresholds: state.project?.review_gate || {} });
+  if (!reviewWindow.git) {
+    warnings.push('Non-git workspace: reality-derived diff & heavy gate are inactive (run git init to enable)');
+  }
   const recentDone = completedDeliveryTasksSinceLastReview(state, taskStore.tasks);
   const sentinels = [];
 
@@ -2148,45 +2372,6 @@ export function checkProject(root = findRoot()) {
     const horizon = activeHorizon(taskStore.tasks, paths, 2);
     const dirty = computeDirtyArtifacts(currentDigests, state.keeper.reviewed_digests, horizon.artifacts);
     if (dirty.length) warnings.push(`In-flight horizon has ${dirty.length} unreviewed/changed artifact(s): ${dirty.join(', ')} — consider skeinn keeper prompt --checkpoint`);
-  }
-
-  // Ledger-integrity sentinels: the .skeinn/ ledger is plain JSON and can be edited directly.
-  // These checks cannot prevent ledger forgery, but they make the common fingerprints loud.
-  for (const task of taskStore.tasks) {
-    if (task.status === 'done' && !task.completed_at) {
-      const msg = `${task.id} is marked done without close metadata (no completed_at) — possible direct ledger edit; audit .skeinn/tasks.json or skeinn task reopen`;
-      warnings.push(msg);
-      sentinels.push(msg);
-    }
-  }
-  const fndNums = state.keeper.findings
-    .map((f) => /^FND-(\d+)$/.exec(f.id || '')?.[1])
-    .filter(Boolean)
-    .map(Number);
-  const recordedFindings = state.keeper.checkpoints.reduce((sum, c) => sum + (c.findings_added || 0), 0);
-  if (fndNums.length && Math.max(...fndNums) > fndNums.length) {
-    const msg = `Findings ledger has sequence gaps (max FND-${String(Math.max(...fndNums)).padStart(3, '0')}, ${fndNums.length} entries) — possible direct ledger edit`;
-    warnings.push(msg);
-    sentinels.push(msg);
-  } else if (!fndNums.length && recordedFindings > 0) {
-    const msg = `Findings ledger is empty but ${recordedFindings} finding(s) were recorded in checkpoints — possible direct ledger edit`;
-    warnings.push(msg);
-    sentinels.push(msg);
-  }
-  const lastResetAt = (state.decision_events || [])
-    .filter((e) => (e.summary || '').includes('Keeper relaunch reset'))
-    .map((e) => e.at || '')
-    .sort()
-    .at(-1) || '';
-  if (lastResetAt && !state.keeper.launch_completed) {
-    const closedDuringDisarm = taskStore.tasks.filter(
-      (t) => t.status === 'done' && (t.completed_at || '') > lastResetAt,
-    );
-    if (closedDuringDisarm.length) {
-      const msg = `${closedDuringDisarm.length} task(s) closed while the heavy-review gate was disarmed after a keeper reset (${closedDuringDisarm.map((t) => t.id).join(', ')}) — Launch has not been re-run`;
-      warnings.push(msg);
-      sentinels.push(msg);
-    }
   }
 
   const coverage = checkDeliverableCoverage(root);
@@ -2255,7 +2440,7 @@ export function scaffoldEval(payload, root = findRoot()) {
     budget_cny_cap: budgetCny,
     arms: {
       baseline: { input_tokens: 0, output_tokens: 0, cost_cny: 0, wall_seconds: 0, tool_calls: 0, batons_completed: 0, hidden_oracle_passed: 0, hidden_oracle_total: 0 },
-      skeinn: { input_tokens: 0, output_tokens: 0, cost_cny: 0, wall_seconds: 0, tool_calls: 0, cli_retries: 0, batons_completed: 0, hidden_oracle_passed: 0, hidden_oracle_total: 0 },
+      skeinn: { input_tokens: 0, output_tokens: 0, cost_cny: 0, wall_seconds: 0, tool_calls: 0, cli_retries: 0, bookkeeping_turns: 0, keeper_rounds_launch: 0, checkpoints_run: 0, checkpoint_real_catches: 0, batons_completed: 0, hidden_oracle_passed: 0, hidden_oracle_total: 0 },
     },
   });
   const oracleScript = `#!/usr/bin/env node

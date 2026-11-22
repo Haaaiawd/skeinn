@@ -11,6 +11,7 @@ const ALLOWED_GIT_SUBCOMMANDS = new Set([
   'cat-file',
   'merge-base',
   'ls-files',
+  'config',
 ]);
 
 const DEFAULT_IGNORE_DIRS = [
@@ -28,13 +29,20 @@ const DEFAULT_IGNORE_FILES = new Set([
   'pnpm-lock.yaml',
   'yarn.lock',
   'bun.lockb',
+  '.skeinn-state',
 ]);
+
+const DEFAULT_IGNORE_PREFIXES = [
+  'keeper-result',
+  'checkpoint-result',
+];
 
 const DEFAULT_IGNORE_SUFFIXES = [
   '.snap',
   '.min.js',
   '.min.css',
   '.map',
+  '.tmp',
 ];
 
 /**
@@ -46,6 +54,9 @@ export function gitIn(repoRoot, args) {
     throw new Error('gitIn requires a non-empty argument array');
   }
   const subcommand = args[0];
+  if (subcommand === 'config' && args[1] !== '--get') {
+    throw new Error('Disallowed git config operation: Skeinn only allows read-only "git config --get"');
+  }
   if (!ALLOWED_GIT_SUBCOMMANDS.has(subcommand)) {
     throw new Error(`Disallowed git subcommand "${subcommand}": Skeinn only executes read-only git commands`);
   }
@@ -82,6 +93,7 @@ export function shouldIgnorePath(relPath, extraPatterns = []) {
   // The review-shaping config can never hide itself: a broadened .skeinnignore
   // (e.g. `*`) must remain visible in the Review Window it is shrinking.
   if (normalized === '.skeinnignore') return false;
+  if (normalized === '.skeinn-state') return false;
   const base = basename(normalized);
 
   // Check explicit negation in .skeinnignore first
@@ -96,6 +108,7 @@ export function shouldIgnorePath(relPath, extraPatterns = []) {
     if (normalized.startsWith(dir) || normalized.includes(`/${dir}`)) return true;
   }
   if (DEFAULT_IGNORE_FILES.has(base)) return true;
+  if (base.endsWith('.json') && DEFAULT_IGNORE_PREFIXES.some((p) => base.startsWith(p))) return true;
   for (const suffix of DEFAULT_IGNORE_SUFFIXES) {
     if (normalized.endsWith(suffix)) return true;
   }
@@ -268,7 +281,10 @@ export function computeSharedSurface(repoRoot, tasks = [], extraPatterns = loadI
  * ALWAYS anchored at keeper.last_reviewed_commit (+ reviewed worktree digest map).
  * NEVER reset by task focus, close, or splitting tasks.
  */
-export function analyzeReviewWindow(repoRoot, keeperState = {}, tasks = [], { dirtyDesignDocs = [] } = {}) {
+export function analyzeReviewWindow(repoRoot, keeperState = {}, tasks = [], { dirtyDesignDocs = [], thresholds = {} } = {}) {
+  const maxFiles = Number.isFinite(thresholds.max_files) && thresholds.max_files > 0 ? thresholds.max_files : 8;
+  const maxLines = Number.isFinite(thresholds.max_lines) && thresholds.max_lines > 0 ? thresholds.max_lines : 400;
+  const maxDirs = Number.isFinite(thresholds.max_dirs) && thresholds.max_dirs > 0 ? thresholds.max_dirs : 3;
   const info = inspectGitRepo(repoRoot);
   if (!info.isGit) {
     return {
@@ -356,10 +372,11 @@ export function analyzeReviewWindow(repoRoot, keeperState = {}, tasks = [], { di
   const reasons = [];
 
   if (files.includes('.skeinnignore')) reasons.push('review-shaping ignore config modified: .skeinnignore');
-  if (files.length >= 8) reasons.push(`review window touched ${files.length} files (>= 8)`);
-  if (linesChanged >= 400) reasons.push(`review window changed ${linesChanged} lines (>= 400)`);
+  if (files.includes('.skeinn-state')) reasons.push('review-shaping state pointer modified: .skeinn-state');
+  if (files.length >= maxFiles) reasons.push(`review window touched ${files.length} files (>= ${maxFiles})`);
+  if (linesChanged >= maxLines) reasons.push(`review window changed ${linesChanged} lines (>= ${maxLines})`);
   if (sharedHits.length) reasons.push(`shared surface touched: ${sharedHits.join(', ')}`);
-  if (topDirs.length >= 3) reasons.push(`cross-directory spread across ${topDirs.length} top-level areas (${topDirs.join(', ')})`);
+  if (topDirs.length >= maxDirs) reasons.push(`cross-directory spread across ${topDirs.length} top-level areas (${topDirs.join(', ')})`);
   if (dirtyDesignDocs.length) reasons.push(`design surface modified: ${dirtyDesignDocs.join(', ')}`);
 
   return {
@@ -381,9 +398,18 @@ function collectTopDirs(files) {
   const dirs = new Set();
   for (const file of files) {
     const parts = file.split('/');
-    dirs.add(parts.length > 1 ? parts[0] : '.');
+    if (parts.length > 1 && parts[0] !== '.') dirs.add(parts[0]);
   }
   return [...dirs].sort();
+}
+
+export function getGitUserIdentity(repoRoot) {
+  const nameRes = gitIn(repoRoot, ['config', '--get', 'user.name']);
+  const emailRes = gitIn(repoRoot, ['config', '--get', 'user.email']);
+  return {
+    name: nameRes.ok ? nameRes.stdout.trim() : '',
+    email: emailRes.ok ? emailRes.stdout.trim() : '',
+  };
 }
 
 /**

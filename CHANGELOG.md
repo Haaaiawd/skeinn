@@ -1,5 +1,45 @@
 # Changelog
 
+## 3.0.1 — Discoverable Sidecar, Atomic Locking, Audit Credibility
+
+Hardening release driven by the RELAY-002/003 judge findings and the EVIL-001 residual list. Eleven identified issues were collapsed into four primitives; two proposals were rejected on first-principles grounds.
+
+### `.skeinn-state` Pointer (git-worktree primitive)
+
+- `skeinn init --state <path>` writes a one-line `.skeinn-state` pointer at the workspace root plus the `AGENTS.md` anchor — external state is auto-discovered by `findRoot()`/`skeinnPaths()`, so a fresh Agent needs only `skeinn context`.
+- Relative pointers resolve from workspace root; absolute paths still work. Unresolvable pointers fail loudly — never silent fallback.
+- Embedded `.skeinn/` always takes precedence over `.skeinn-state` (anti-redirection).
+- `skeinn check` reports pointer provenance, errors on missing `state.json`/`tasks.json` targets, warns on pointer-newer-than-state and on empty ledgers at the target.
+- `.skeinn-state` is a review-shaping file: default-ignored for diff cleanliness but can never be hidden by `.skeinnignore` patterns; modifying it is an explicit heavy-window reason.
+- Production-sidecar vs blind-eval hiding are now orthogonal: `--no-anchor` skips both pointer and anchor for isolated benchmark workspaces.
+
+### `withStateLock()` — Cross-Process Integrity
+
+- All read→validate→modify→atomic-write transactions run inside an atomic `mkdir` `.lock/` with `{pid, at}` ownership in `owner.json`.
+- Stale lock recovery: >30s age or dead PID → preempted. 20–100ms randomized backoff, 5s ceiling, `finally` release.
+
+### Review-Window De-noising & Ergonomics
+
+- `collectTopDirs()` no longer counts root-level files (`.`) as an architecture directory.
+- Default ignores add `.skeinn-state`, `keeper-result*.json`, `checkpoint-result*.json`, `*.tmp`.
+- Heavy thresholds configurable via `state.project.review_gate: { max_files, max_lines, max_dirs }` (defaults 8/400/3) — no new config file.
+- One-line flags kill the bash-JSON quoting trap: `record --confirm "<fact>"` / `record --assume "<text>"` (correct fields enforced, never interchangeable), `decision --summary "<what>" --changes "a.js,b.js" [--affects "TASK-001"]`. Complex payloads stay on `--stdin`/`--json-file`.
+- `task close --evidence` rejects trivial filler: bare `done`/`ok`/`passed`/`fixed` or evidence < 12 chars.
+
+### Audit Credibility Sentinels (read-only warnings)
+
+- `skeinn check` warns on: `reviewer_id` reused within the same launch epoch, reviewer IDs resembling `git config user.name`/`user.email`, ≥2 resets within one uncompleted launch, and delivery closes within 10 minutes after reset — in addition to the v3.0 ledger-integrity sentinels (forged `done` without `completed_at`, findings sequence gaps, empty ledger vs recorded findings, closes inside the post-reset disarm window).
+- Blind-judge prompt gains two dimensions: architectural cleanliness/regression resistance, and Agent bookkeeping overhead (`cli_retries`, `bookkeeping_turns`).
+
+### Rejected (architectural hygiene, documented not implemented)
+
+- **`SKEINN_HMAC_KEY` state signing** — an Agent that can invoke the CLI reads the same environment and forges signatures in three lines. The real boundary is external (hidden oracle, fresh-context Keeper), not local self-stamps.
+- **Non-git mtime/SHA snapshot emulation** — reproducing `.gitignore`, symlink, binary and large-file semantics would create a second fragile VCS. Non-git workspaces get a loud "reality-derived review inactive — run `git init`" warning instead.
+
+### Tests
+
+53/53 — new regression coverage for pointer creation/discovery/precedence/tampering, stale-lock recovery, root-dir & result-file de-noising, `review_gate` configurability, one-line flags, trivial-evidence rejection, and the audit sentinels; all v3.0 + EVIL-001 hardening tests retained.
+
 ## 3.0.0 — Intent-Only, Reality-Derived Continuity
 
 ### Structural Architecture Upgrades

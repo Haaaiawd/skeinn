@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, utimesSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -102,7 +102,7 @@ test('context teaches adaptive question judgment without a fixed questionnaire',
 test('unattended runs use an isolated sidecar without fabricating a human or polluting the workspace', () => {
   const root = workspace();
   const sidecar = workspace();
-  run(root, ['init', '--state-dir', sidecar]);
+  run(root, ['init', '--state-dir', sidecar, '--no-anchor']);
   assert(!existsSync(join(root, '.skeinn')), 'sidecar mode wrote Skeinn state into the scored workspace');
   assert(!existsSync(join(root, 'AGENTS.md')), 'sidecar mode edited the scored workspace anchor');
   assert(existsSync(join(sidecar, 'state.json')), 'sidecar state missing');
@@ -668,7 +668,7 @@ test('help and source surface stay minimal', () => {
   assert(chineseReadme.includes('--source human'), 'Chinese README should teach capability authority provenance');
   assert(chineseReadme.includes('review.mode: "independent"'), 'Chinese README should teach independent Keeper provenance');
   assert(chineseReadme.includes('skeinn task close --help'), 'Chinese README should point structured writes to command-local help');
-  assert(run(root, ['--version']) === 'skeinn 3.0.0', 'version mismatch');
+  assert(run(root, ['--version']) === 'skeinn 3.0.1', 'version mismatch');
 });
 
 const PROJ = (text) => `# Project Whole\n\n## Intended result\n${text}\n\n## People and reality\nA human collaborates naturally while the Agent silently preserves state.\n\n## Whole behavior\nThe Agent clarifies, records, builds a work map, resumes one Task, and proves it done.\n\n## Boundaries\nThe human never has to operate Skeinn. Irreversible work needs authority.\n\n## System shape\nHuman-readable project truth plus structured Task state compiled by a CLI.\n\n## Completion and failure\nA fresh Agent can start without chat memory; document volume alone is failure.\n`;
@@ -1407,6 +1407,137 @@ test('v3.0 forbids delivery->spike dependency, flags locks violations, and refre
   const refreshed = JSON.parse(run(root, ['init', '--refresh-agents']));
   assert(refreshed.refreshed_agents === true, 'init --refresh-agents must refresh AGENTS.md');
   assert(readFileSync(join(root, 'AGENTS.md'), 'utf8').includes('<!-- skeinn:v3 -->'), 'AGENTS.md must now contain v3 marker');
+});
+
+
+test('v3.0.1 sidecar --state writes .skeinn-state + AGENTS.md, auto-discovers without flags, and fails loudly if unresolvable', () => {
+  const root = workspace();
+  const extState = join(workspace(), 'shared-skeinn');
+  const initOut = JSON.parse(run(root, ['init', '--state', extState]));
+  assert(initOut.files.includes('.skeinn-state') && initOut.files.includes('AGENTS.md'), 'default sidecar must write both .skeinn-state and AGENTS.md');
+  assert(existsSync(join(root, '.skeinn-state')), '.skeinn-state pointer file must exist');
+  assert(existsSync(join(root, 'AGENTS.md')), 'AGENTS.md anchor must exist');
+
+  // Fresh Agent runs skeinn context with ZERO --state flags -> auto-discovers via .skeinn-state!
+  const ctx = run(root, ['context']);
+  assert(ctx.includes('(pointer)') && ctx.includes('via .skeinn-state'), 'context banner must display pointer mode and via .skeinn-state');
+
+  // Unresolvable pointer must fail loudly
+  writeFileSync(join(root, '.skeinn-state'), './nonexistent-dir-xyz\n', 'utf8');
+  const err = run(root, ['context'], 1);
+  assert(err.includes('unresolvable'), `broken pointer must fail loudly: ${err}`);
+});
+
+test('v3.0.1 embedded .skeinn/ beats .skeinn-state pointer, and check catches pointer redirection/tampering', () => {
+  const root = workspace();
+  const extState = join(workspace(), 'ext-state');
+  run(root, ['init', '--state', extState]);
+
+  // Simulate pointer tampering: touch .skeinn-state 5 seconds into the future (newer than state.json)
+  const ptrPath = join(root, '.skeinn-state');
+  const futureDate = new Date(Date.now() + 5000);
+  utimesSync(ptrPath, futureDate, futureDate);
+  const checkTamper = JSON.parse(run(root, ['check']));
+  assert(checkTamper.warnings.some((w) => w.includes('newer than state.json')), 'check must warn when .skeinn-state is newer than state.json');
+  assert(checkTamper.warnings.some((w) => w.includes('empty ledger')), 'check must warn when pointer targets empty ledger');
+
+  // Now create embedded .skeinn/ inside root -> embedded MUST win over .skeinn-state
+  const localRoot = workspace();
+  run(localRoot, ['init']);
+  writeFileSync(join(localRoot, '.skeinn-state'), extState + '\n', 'utf8');
+  const ctx = run(localRoot, ['context']);
+  assert(ctx.includes('(local)') && !ctx.includes('via .skeinn-state'), 'embedded .skeinn/ must strictly beat .skeinn-state');
+  const checkBoth = JSON.parse(run(localRoot, ['check']));
+  assert(checkBoth.warnings.some((w) => w.includes('embedded takes precedence')), 'check must warn when both .skeinn/ and .skeinn-state exist');
+});
+
+test('v3.0.1 root-level files & keeper-result.json do not inflate top_dirs, and project.review_gate thresholds are configurable', () => {
+  const root = initGitFixture();
+  runWithStdin(root, ['task', 'plan', '--stdin'], JSON.stringify({
+    tasks: [{ title: 'Small edit', outcome: 'Edit two subdirs plus root artifact without false heavy', acceptance: [{ criterion: 'ok', verify_by: 'test', evidence: '' }], boundaries: ['two subdirs'], reads: ['.skeinn/PROJECT.md'], implements: '.skeinn/design/core.md#Responsibility' }],
+  }));
+  const ready = JSON.parse(run(root, ['project', 'ready']));
+  runWithStdin(root, ['keeper', 'record', '--stdin'], JSON.stringify({
+    run_id: 'launch-noise-001',
+    prepared_digest: ready.digest,
+    verdict: 'passed',
+    review: { mode: 'independent', reviewer_id: 'fresh-noise-01', evidence: 'Isolated review.' },
+    summary: 'Passed.',
+    gaps: [],
+    evidence: ['OK'],
+  }));
+
+  // Touch 2 real subdirs (src/, lib/) + root README-scratch.txt + keeper-result.json -> must stay LIGHT (top_dirs = 2, not 3!)
+  mkdirSync(join(root, 'lib'), { recursive: true });
+  writeFileSync(join(root, 'src', 'a.js'), 'export const a = 1;\n', 'utf8');
+  writeFileSync(join(root, 'lib', 'b.js'), 'export const b = 2;\n', 'utf8');
+  writeFileSync(join(root, 'notes.txt'), 'root file\n', 'utf8');
+  writeFileSync(join(root, 'keeper-result.json'), '{"ignored":true}\n', 'utf8');
+
+  const checkLight = JSON.parse(run(root, ['check']));
+  assert(checkLight.review_window.level === 'light', `root files must not push 2 subdirs to heavy: ${JSON.stringify(checkLight.review_window)}`);
+  assert(!checkLight.review_window.files.includes('keeper-result.json'), 'keeper-result.json must be ignored by default');
+
+  // Lower project.review_gate.max_files to 2 in state.json -> same diff now becomes heavy!
+  const statePath = join(root, '.skeinn', 'state.json');
+  const st = JSON.parse(readFileSync(statePath, 'utf8'));
+  st.project.review_gate = { max_files: 2 };
+  writeFileSync(statePath, JSON.stringify(st, null, 2));
+  const checkCustom = JSON.parse(run(root, ['check']));
+  assert(checkCustom.review_window.level === 'heavy' && checkCustom.review_window.reasons.some((r) => r.includes('>= 2')), 'custom project.review_gate.max_files must apply');
+});
+
+test('v3.0.1 one-line record/decision flags work cleanly and trivial --evidence filler is rejected', () => {
+  const root = initGitFixture();
+  const rec = JSON.parse(run(root, ['record', '--confirm', 'Node 18+ runtime verified', '--assume', 'Single-user local deployment']));
+  assert(rec.confirmed.some((c) => c.text === 'Node 18+ runtime verified'), '--confirm must write to confirmed');
+  assert(rec.assumptions.some((a) => a.text === 'Single-user local deployment'), '--assume must write to assumptions');
+
+  const dec = JSON.parse(run(root, ['decision', '--summary', 'Adopt one-line CLI flags to avoid bash quoting hell', '--changes', 'cli/bin/skeinn.js,cli/src/store.js', '--affects', 'TASK-001']));
+  assert(dec.changes.length === 2 && dec.affected_tasks[0] === 'TASK-001', 'one-line decision flags must populate changes and affected_tasks');
+
+  runWithStdin(root, ['task', 'plan', '--stdin'], JSON.stringify({
+    tasks: [{ title: 'Evidence guard', outcome: 'Ensure trivial filler evidence is rejected on close', acceptance: [{ criterion: 'ok', verify_by: 'test', evidence: '' }], boundaries: ['test'], reads: ['.skeinn/PROJECT.md'], implements: '.skeinn/design/core.md#Responsibility' }],
+  }));
+  const badEv = run(root, ['task', 'close', 'TASK-001', '--evidence', 'done'], 1);
+  assert(badEv.includes('concrete verifiable proof'), `trivial evidence must be rejected: ${badEv}`);
+});
+
+test('v3.0.1 audit integrity sentinels flag same-epoch reviewer_id reuse, committer match, and stale lock recovery', () => {
+  const root = initGitFixture();
+  // Create a stale lock with a dead PID -> withStateLock must recover cleanly without hanging
+  mkdirSync(join(root, '.skeinn', '.lock'), { recursive: true });
+  writeFileSync(join(root, '.skeinn', '.lock', 'owner.json'), JSON.stringify({ pid: 999999, at: '2020-01-01T00:00:00.000Z' }), 'utf8');
+
+  runWithStdin(root, ['task', 'plan', '--stdin'], JSON.stringify({
+    tasks: [{ title: 'Sentinel test', outcome: 'Verify stale lock recovery and reviewer_id sentinels', acceptance: [{ criterion: 'ok', verify_by: 'test', evidence: '' }], boundaries: ['test'], reads: ['.skeinn/PROJECT.md'], implements: '.skeinn/design/core.md#Responsibility' }],
+  }));
+  const ready = JSON.parse(run(root, ['project', 'ready']));
+  // Reuse reviewer_id matching git committer ("Skeinn Test") across Launch + Checkpoint in same epoch
+  runWithStdin(root, ['keeper', 'record', '--stdin'], JSON.stringify({
+    run_id: 'launch-sent-001',
+    prepared_digest: ready.digest,
+    verdict: 'passed',
+    review: { mode: 'independent', reviewer_id: 'Skeinn Test', evidence: 'Isolated launch review.' },
+    summary: 'Passed.',
+    gaps: [],
+    evidence: ['OK'],
+  }));
+  runWithStdin(root, ['keeper', 'record', '--checkpoint', '--stdin'], JSON.stringify({
+    run_id: 'chk-sent-001',
+    verdict: 'clean',
+    review: { mode: 'independent', reviewer_id: 'Skeinn Test', evidence: 'Isolated checkpoint review.' },
+    summary: 'Clean.',
+    evidence: ['OK'],
+  }));
+
+  // Stale lock should be cleaned up after focusTask
+  const focused = JSON.parse(run(root, ['task', 'focus', 'TASK-001']));
+  assert(focused.status === 'active' && !existsSync(join(root, '.skeinn', '.lock')), 'stale lock must be recovered and released');
+
+  const checkOut = JSON.parse(run(root, ['check']));
+  assert(checkOut.warnings.some((w) => w.includes('matches git committer identity')), 'must warn when reviewer_id matches git committer');
+  assert(checkOut.warnings.some((w) => w.includes('reused 2 times within launch epoch 1')), 'must warn when reviewer_id is reused in same launch epoch');
 });
 
 test('v3.0 freeform finding scopes (task: prefix, compound) gate focus and surface as advisories', () => {

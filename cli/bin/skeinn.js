@@ -56,6 +56,17 @@ function option(name) {
   return index === -1 ? undefined : argv[index + 1];
 }
 
+function multiOption(name) {
+  const values = [];
+  for (let i = 0; i < argv.length; i += 1) {
+    if (argv[i] === name && argv[i + 1] !== undefined) {
+      values.push(argv[i + 1]);
+      i += 1;
+    }
+  }
+  return values;
+}
+
 function stripGlobalFlags(args) {
   const out = [];
   for (let i = 0; i < args.length; i += 1) {
@@ -131,13 +142,14 @@ Typical flow:
   10. skeinn check                        — verify health, 3 sentinels, review window, and drift
 
 Start and resume
-  skeinn init [--refresh-agents]
+  skeinn init [--refresh-agents] [--no-anchor]
   skeinn context [--task TASK-001] [--keeper] [--checkpoint] [--full] [--human-channel available|unavailable]
   skeinn check
 
 Preserve understanding
-  skeinn record --stdin | --json <json> | --json-file <path>
-  skeinn decision --stdin | --json <json> | --json-file <path>
+  skeinn record --confirm "<verified fact>" | --assume "<bounded assumption>" | --stdin | --json-file <path>
+                (--confirm writes confirmed facts ONLY; --assume writes bounded assumptions — never mix them)
+  skeinn decision --summary "<what & why>" --changes "a.js,b.js" [--affects "TASK-001"] | --stdin | --json-file <path>
   skeinn clarify start --reason <text> | resolve --stdin | close | status
   skeinn project ready [--force-round --reason <text>]
   skeinn design add <slug> --title <text> --kind <product|experience|system|contract|verification|operations|research>
@@ -173,8 +185,10 @@ Evaluate Skeinn itself
 
 Parallel worktrees & sidecar state
   Linked git worktrees automatically share the main worktree's .skeinn/ while sensing git diff in
-  their own worktree. Override explicitly with --state <path> or SKEINN_STATE=<path>.
-  (For benchmark sidecars outside a scored workspace, --state-dir <path> remains supported.)
+  their own worktree. External state via --state <path> writes a .skeinn-state pointer + AGENTS.md
+  by default so subsequent Agents auto-discover it; pass --no-anchor for pure blind-eval isolation.
+  If writing temporary JSON payloads instead of --stdin, place them inside .skeinn/.tmp/ so they
+  never pollute the workspace root.
 
 Help topics:
   skeinn help <record|decision|task-plan|task-update|task-block|task-close|keeper-record|eval-scaffold|clarify-resolve|prompts>
@@ -361,7 +375,7 @@ try {
       output(subcommand ? structuredHelp(subcommand) : help());
       break;
     case 'init':
-      output(initProject(undefined, { refreshAgents: argv.includes('--refresh-agents') }));
+      output(initProject(undefined, { refreshAgents: argv.includes('--refresh-agents'), noAnchor: argv.includes('--no-anchor') }));
       break;
     case 'context':
       output(compileContext({
@@ -381,9 +395,23 @@ try {
     case 'prompts':
       signpost('skeinn prompts', 'skeinn help prompts');
       break;
-    case 'record':
-      output(subcommand === '--help' ? structuredHelp('record') : recordUnderstanding(readJsonInput()));
+    case 'record': {
+      if (subcommand === '--help' || argv.includes('--help')) {
+        output(structuredHelp('record'));
+      } else {
+        const confirms = multiOption('--confirm');
+        const assumes = multiOption('--assume');
+        if (confirms.length || assumes.length) {
+          output(recordUnderstanding({
+            ...(confirms.length ? { confirmed: confirms } : {}),
+            ...(assumes.length ? { assumptions: assumes.map((text) => ({ text, source: 'agent' })) } : {}),
+          }));
+        } else {
+          output(recordUnderstanding(readJsonInput()));
+        }
+      }
       break;
+    }
     case 'clarify': {
       if (argv.includes('--help') && subcommand === 'resolve') output(structuredHelp('clarify-resolve'));
       else if (subcommand === '--help' || (argv.includes('--help') && !subcommand)) output(CONCEPT_HELP.clarify);
@@ -394,9 +422,23 @@ try {
       else throw new Error('Usage: skeinn clarify start|resolve|close|status');
       break;
     }
-    case 'decision':
-      output(subcommand === '--help' ? structuredHelp('decision') : recordDecision(readJsonInput()));
+    case 'decision': {
+      if (subcommand === '--help' || argv.includes('--help')) {
+        output(structuredHelp('decision'));
+      } else {
+        const summary = option('--summary');
+        const changesRaw = option('--changes');
+        if (summary !== undefined || changesRaw !== undefined) {
+          const changes = (changesRaw || '').split(',').map((s) => s.trim()).filter(Boolean);
+          const affectsRaw = option('--affects');
+          const affected_tasks = affectsRaw ? affectsRaw.split(',').map((s) => s.trim()).filter(Boolean) : undefined;
+          output(recordDecision({ summary, changes, ...(affected_tasks ? { affected_tasks } : {}) }));
+        } else {
+          output(recordDecision(readJsonInput()));
+        }
+      }
       break;
+    }
     case 'check': {
       const result = checkProject();
       output(result);

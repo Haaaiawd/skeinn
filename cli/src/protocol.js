@@ -799,8 +799,9 @@ file/command evidence justifying why the winner is meaningfully better:
 2. **Specialist capability & craft depth** — Did domain judgment produce visibly stronger, non-generic choices (or did it collapse into safe AI defaults)?
 3. **Cold-handoff continuity** — Across forced resets / relay batons, which arm preserved truth cleanly without drift or rework?
 4. **Hidden-oracle & proof credibility** — Compare objective Hidden Oracle pass rates and whether each arm reported blind spots honestly instead of claiming false green.
-5. **User burden & ceremony** — Penalize unnecessary ceremony, unnecessary questions, bloated docs, or friction pushed onto the human.
-6. **Net value per RMB (cost_cny & latency)** — Given real telemetry, was any quality lead worth the added tokens, wall time, and retries?
+5. **Architectural cleanliness & regression resistance** — Which arm kept the codebase clean without patch-on-patch hacks, dead code, or silent regressions?
+6. **User burden & ceremony (Agent friction & bookkeeping overhead)** — Compare \`cli_retries\`, \`bookkeeping_turns\`, ceremony overhead, and friction pushed onto the human. Penalize unnecessary ceremony, bloated docs, or workflow theater.
+7. **Net value per RMB (cost_cny & latency)** — Given real telemetry, was any quality lead worth the added tokens, wall time, and retries?
 
 ## Order-swap requirement
 
