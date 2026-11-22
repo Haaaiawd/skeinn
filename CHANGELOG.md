@@ -29,6 +29,10 @@ Residual boundary documented, not fixed: `.skeinn/` is plain JSON — a fully co
 
 Dual-arm, 3-baton zero-memory relay vs conventional handoff docs on `deepseek-chat` — see `evals/relay-002/REPORT.md`. Hidden oracle 10/10 both arms; order-swapped blind judging split (33:25 baseline / 30:30 tie). Skeinn arm recovered intent from disk across 10 sessions incl. a crash and 8 budget-cap amputations, shipped real-browser e2e that caught two data-loss bugs the baseline's jsdom suite could not see — at ~6× the turn cost.
 
+### Continuity Benchmark (RELAY-003) — vague spec variant
+
+Same race, deliberately vague brief + contradictory injections (no-plaintext ∧ no-password; vague declutter + feature retraction) — see `evals/relay-003/REPORT.md`. Result flipped: equal turn cost (212 vs 213), baseline needed a 4th rescue session after an unrecorded decision left a half-built export + 16 test regressions. Skeinn arm converged in 3 via the decision ledger; blind judge picked Skeinn on both order-swapped passes.
+
 ### Clean v3.0 CLI & Context Injection
 - **Zero-Ceremony Input**: All JSON commands accept `--stdin`, `--json '<json>'`, or `--json-file <path>`; `skeinn task close <id> --evidence "<proof>"` maps single-line proof across all acceptance criteria.
 - **Clean Vocabulary + Signposts**: Replaced `task start/done` -> `task focus/close`, added `task list`, unified `keeper prompt/record [--checkpoint]`, added `init --refresh-agents` (`<!-- skeinn:v3 -->`). Removed legacy aliases (`task start`, `task done`, `capability research/synthesize`, `keeper checkpoint`, `review`, `resume`, `prompts`) now exit 1 with exact migration signposts.

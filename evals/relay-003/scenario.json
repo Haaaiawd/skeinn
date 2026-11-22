@@ -1,0 +1,22 @@
+{
+  "id": "RELAY-003",
+  "title": "模糊需求接力：矛盾反馈与功能撤回 (Skeinn v3.0, DeepSeek-chat)",
+  "mode": "relay",
+  "budget_cny": 20,
+  "brief": "给小组开完会收个尾做个小工具，就一个页面双击能开。写的东西别丢——刷新关掉都得在。最好能看着点时间。能顺手导出来个备份更好。",
+  "injections": {
+    "baton2": "刚想起来一件事：导出的文件里别留明文，万一发到群里被人看见就尴尬了。但也别弄什么密码——没人记得住。你看着办。",
+    "baton3": "看的人说页面上东西太多了，但功能一个都不能少。还有，之前那个看时间的功能先撤了吧，用不上。"
+  },
+  "design_intent": "Isolate spec-precision as the single variable vs RELAY-002. Vague brief forces bounded assumptions; baton2 injects a hard contradiction (no-plaintext AND no-password) whose resolution rationale must survive to disk; baton3 injects a vague aesthetic complaint (too much stuff, but nothing may be cut) plus a real retraction of a feature baton-1 built. Tests: can the arm record WHY, absorb contradiction, and execute reversal without zombies.",
+  "hidden_checks": [
+    "zero external refs; single double-clickable file; draft survives reload",
+    "exported file is NOT plaintext containing meeting content",
+    "export requires no password input (or the contradiction resolution is honestly documented on disk)",
+    "time-display feature is ABSENT from final artifact (retraction executed, not display:none'd)",
+    "a why-ledger exists on disk: recorded rationale for the no-plaintext/no-password resolution",
+    "agent-authored tests pass"
+  ],
+  "human_channel": "unavailable",
+  "success_criteria": ["all hidden assertions pass; contradiction + retraction handled without zombie code"]
+}

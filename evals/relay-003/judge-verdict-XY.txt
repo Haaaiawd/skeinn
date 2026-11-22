@@ -1,0 +1,93 @@
+# Blind Relay Benchmark — Grading
+
+Harsh read. I've got both arms, both oracles passing 12/12, and the telemetry. The differences that matter are not in the final artifact (both ship), they're in **what a skeptical baton-3 could reconstruct** and **how much of the recovery cost was pre-paid**.
+
+---
+
+## Scorecard
+
+| Dimension (10 pts) | **Arm X** | **Arm Y** |
+|---|---:|---:|
+| 1. Final artifact quality | 8.5 | **9.0** |
+| 2. Evidence / why-recovery quality | 6.0 | **9.0** |
+| 3. Continuity under stress | 6.5 | **9.0** |
+| 4. Cost efficiency | **7.5** | 6.5 |
+| **Total** | **28.5** | **33.5** |
+
+---
+
+### 1. Final artifact quality
+
+**Arm X — 8.5.** 187-line `index.html` + 407-line `src/core.js`, 37/37 green via `npm test`, no build step. Honest skin (`MWSKIN1:`), explicit threat model in DESIGN §6 ("皮肤 / skin, never encryption"), `.md` export deliberately plaintext, retraction fences in `tests/smoke.js` + `tests/core.test.js`. Real weaknesses:
+- **`DESIGN.md` §6 is truncated mid-sentence** ("no dependency, no async" — the paragraph cuts off). That's a doc that survived three batons and still has a dangling section; a reader cannot tell if the algorithm description is complete.
+- Relies on a hand-rolled DOM stub (`setTimeout` pushed into a `timers` array). That's ~a page of test plumbing that isn't product — fine, but it's implicit knowledge that only HANDOFF gotcha #5 preserves.
+- 37/37 vs Y's 59/59 — fewer tests, but the smoke fences are substantively the same idea.
+
+**Arm Y — 9.0.** 611-line generated `index.html` from `src/` via `tools/build-page.js`, 59/59 via custom `suite()` runner. Byte-identical core check between `src/core.js` and the inlined form (stated in README + tested) is a genuine hardening X doesn't have. `DECISIONS.md` records three D-* entries with timestamps, changed-file lists, affected task ids. Retraction has both a design doc (`feature-retraction-and-visual-pass.md`) and regression fences. Skin is `MWB1:` with checksum, same honesty posture. Weakness: **611-line generated page** is bigger surface; the build step is a foot-gun for anyone who edits `index.html` directly (README warns, but README is not a compiler). Also — the docs list a `[state-dir]` outside the workspace, which is the thing that forced the oracle fix (`--state sidecar arg`); a naive reader of just the workspace has no idea `DECISIONS.md` justifies anything.
+
+Both oracles 12/12 with disclosed fixes (state-dir arg for Y, "retracted" vocab addition, workspace-entry-point-aware test check for Y). Both artifacts are honest about the contradiction. **Y wins narrowly** on byte-identical-core enforcement and on having the rejected-alternatives trail shipped in the workspace-adjacent doc that a reader can actually find.
+
+---
+
+### 2. Evidence / why-recovery quality
+
+This is where the arms diverge.
+
+**Arm X — 6.0.** `docs/HANDOFF.md` is *excellent prose*. It has a status table, "what is proven (by tests)" mapped per requirement, a gotchas list (#1-#8) that captures the DOM stub, the storage-key trap, the `.md`-plaintext-is-intentional decision, and a `Do NOT` block. But:
+- **It's a hand-written summary of history, not history itself.** A skeptical baton-3 reading `HANDOFF.md` gets X's *conclusion* that the skin resolution was correct — but the *alternatives that were rejected* are one line in DESIGN §6 ("Do not 'fix' this by adding a passphrase — that was explicitly vetoed"). There is no record of *why* passphrase, key-file, random-salt, or WebCrypto were rejected — only that one was. DESIGN §6 is also truncated, so if you wanted to check *how* the keystream works to verify the honesty claim, you can't, from the doc alone; you have to read the 407-line `core.js`.
+- **Why-recovery is one-shot.** There is exactly one HANDOFF. When baton 4 arrives it will read this — and then overwrite it. The next baton's "why" is only recoverable if baton 4 remembers to preserve the previous one. X has no append-only decision record.
+- To be fair to X: `HANDOFF.md`'s "Quick verification (< 2 min)" code block is genuinely good evidence — a skeptical reader can reproduce the honesty claim (`false '机密 A'`) in one command. That's worth real points.
+
+**Arm Y — 9.0.** `DECISIONS.md` is append-only with typed ids (`D-2026-11-22-iyz3`), timestamps, `Changed:` file lists, `Affected:` task ids. `design/blurred-export.md` has a **"Alternatives considered" section that enumerates four rejections with the cost of each**: real passphrase enc (vetoed by "没人记得住" + async-on-file:// + lost-passphrase support), random per-file key, etc. `design/feature-retraction-and-visual-pass.md` records the *two interpretations* of "撤了吧" and explicitly rejects "hide it" — "hidden-but-present does NOT satisfy it." That is a **why-ledger**, not a why-summary. A skeptical baton-3 (or a skeptical reviewer six weeks later) can reconstruct: (a) what was asked, (b) what was rejected materially, (c) which task ids were affected. That's the difference between "trust me" and "here's the rejected menu."
+
+Two real deductions from 10:
+- **The state dir is outside the workspace.** The oracle needed a `--state` arg to grade it. That means a workspace-only reader (the realistic baton-4 who inherits a tarball) gets `README.md` + `DECISIONS.md` referenced *from within the workspace but stored elsewhere*. `DECISIONS.md` is visible in the listing, but the path is fragile. If the state dir doesn't get packed into the handoff, Y's entire advantage vanishes and Y becomes *worse* than X (X's evidence is inside the workspace).
+- Retrieval isn't one command; it's "run the recovery command" (implied by the brief — the workspace has a `context-recovery command`). Single `cat DECISIONS.md` is not the story; a tool is. That tool is only as good as its docs — not shown in the files listed. So I can only credit what I can see, which is `DECISIONS.md` + the two design docs. Those are enough for 9.
+
+**Cheapness:** X is readable in one file (`HANDOFF.md`) — pick it up in ~3 min. Y is readable in `README.md` + `DECISIONS.md` + 2 design docs — pick it up in ~8 min. But Y's is *auditable*; X's is *assertable*. Cheap if you trust; cheap-and-verifiable is worth more.
+
+---
+
+### 3. Continuity under stress
+
+This is the dimension the injection is designed to stress.
+
+**Arm X — 6.5.** The telemetry is damning:
+- Baton 2 capped with an **UNWIRED half-built sealed export, NO tests, NO docs.** That is not a "cap after a clean plank" — it's a cap in the middle of a load-bearing change.
+- Baton 3 capped with **16 test regressions + retraction unhandled.** A baton-4 resume was *required* to converge (37/37 green). The workspace X's "HANDOFF.md" was written by that **4th** session — i.e. the "baton 3" doc is really "baton 4's cleanup of baton 3's failure."
+- The HANDOFF openly says so ("The workspace arrived mid-flight and broken… 16 failing… the whole timer API + `formatDuration`/`formatClock` while the page/tests still used it"). Leadership honesty is good; the fact that one baton inherited a red tree is the issue.
+- Retraction was handled correctly in the end, but only after a **fourth** session.
+
+**Arm Y — 9.0.**
+- Baton 1 capped with suite RED (45/1) **while debugging its own test harness.** That's a nasty place to cap: your tests don't trust themselves. Baton 2 **recovered from the state dir, fixed the harness bug, resolved the contradiction WITH a recorded decision (rejected alternatives documented), closed all tasks 55/55.** Baton 3 executed retraction + declutter with regression fences, 59/59.
+- **No fourth session was needed.** That is the whole point of a state dir: the recovery command got baton 2 back to green *in the same session* and left a `DECISIONS.md` entry so baton 3 could see *why*. X's recovery was prose-mediated and still needed an extra session.
+- The contradiction resolution in Y has both a `DESIGN` doc *and* a rejected-alternatives section and task ids — the "too much stuff but no feature cut" + retraction combo is written into `feature-retraction-and-visual-pass.md`'s "two interpretations" and explicitly resolved with "hidden-but-present does NOT satisfy." That is exactly the discipline a mid-flight retraction demands.
+- One deduction: Y's baton-1 capped *while debugging its own harness*, which is a self-inflicted wound (the harness was custom — `suite()` — so it had to be built first). X's harness was `node:test`, which the platform gave it. So Y spent baton 1 building infrastructure that X got for free; that's a real cost and a real fragility source. But Y's *recovery* from it was one session, whereas X's recovery from a much less self-inflicted cap took two sessions.
+
+---
+
+### 4. Cost efficiency
+
+**Arm X — 7.5.** 4 sessions, 213 turns, ~224 tool calls, **~580s compute.** Cheaper on compute and tool calls, but **paid an extra session** — the cost that matters most in a zero-memory relay is session count, because each session is a full context reload with a loss-of-why risk. X's "cheap" number is a consequence of not having infrastructure to recover from; it is cheap because it did less in the interesting cases and got lucky with a 4th session available.
+
+**Arm Y — 6.5.** 3 sessions, 212 turns, ~216 tool calls, **~780s compute** — 34% more compute than X for 25% fewer sessions. That's not "cheaper" in wall-clock; it's *cheaper per unit of recovered state*. Y spent the extra compute building the harness and the state dir; X spent it on a fourth converged session. **But the brief is about continuity under changing requirements, not about minimizing compute.** If I had to pick one to run for a multi-week project, the amortized compute per successful baton is what matters — and Y's ~260s/baton vs X's ~145s/baton is a real gap that only pays for itself if Y's extra sessions-to-green don't materialize. In this run, Y was 3/3; X was 4/4. Y wins on sessions, loses on raw compute.
+
+Score X 7.5 and Y 6.5 on this dimension *as stated* (compute efficiency), and I want to note the tension explicitly: the dimension is named "cost efficiency" but the scoring for a *zero-memory relay* should weight "sessions to convergence" higher than raw compute. On that scoring Y wins. I'm scoring to the label, not my preference, but the verdict reads against the label.
+
+---
+
+## Verdict
+
+**For a multi-week project with changing requirements, I would trust Arm Y.** Not because its artifact is dramatically better — the two artifacts are close (8.5 vs 9.0) — but because:
+
+1. **Y has a why-ledger; X has a why-summary.** `DECISIONS.md` + `design/blurred-export.md`'s "Alternatives considered" survive as append-only evidence. X's `HANDOFF.md` will be overwritten by the next baton; X's `DESIGN.md` §6 is *literally truncated mid-sentence* (a doc that has been through three batons and still has a dangling section is a doc that was not read carefully on the way through). When requirements change on week 5, the question "why is the export a skin and not real encryption?" is answered *by a rejected-alternatives list with costs* in Y, and *by a single "was vetoed" line* in X.
+
+2. **Y converged under the contradiction in 3 sessions; X needed 4.** The prompt's injected mess — a literal contradiction ("no plaintext" ∧ "no password") — is the *easy* case. The harder case is what `feature-retraction-and-visual-pass.md` handles: a vague declutter plus a retraction *at the same time*. Y wrote down the two interpretations and chose one with a fence. X writes in its HANDOFF "the timer was supposed to be removed anyway" — which is a retrospective claim — but the contemporaneous record of *why* X chose "hide" was rejected isn't in the workspace; it's in a gotcha ("Do not re-introduce the clock") that asserts the outcome, not the reasoning.
+
+3. **Y's byte-identical core enforcement is a cheap, durable guardrail** that X's test suite doesn't have. For a multi-week project where `index.html` and `src/core.js` drift apart, this is a real trap X would eventually fall into.
+
+4. **The cost penalty against Y is a one-time compute tax** (currently ~200s extra, 1.34×), which is small compared to the risk of baton-N re-litigating a decision X's handoff describes instead of records. If the project runs 4+ batons past this point, Y's `DECISIONS.md` amortizes to zero and X's overwritten `HANDOFF.md` starts costing sessions.
+
+**Where X wins and I want to be explicit:** X's `HANDOFF.md` is arguably better *narrative* — it is more usable by a fresh human, and its "Quick verification (< 2 min)" block is uniquely good. X's 580s compute vs Y's 780s is a real, real difference. And X didn't have a build step and a sidecar dir to explain, so its baton-1 was simpler. X would be the right pick for a **one-shot, three-baton, ship-and-forget** project with stable requirements. It is the wrong pick for a multi-week project with changing requirements, which is the question.
+
+**One flag on Y.** The `[state-dir]` lives *outside the workspace*. If the handoff tarball doesn't include it, Y becomes X-with-worse-artifact, because the workspace `README.md` points at `.skeinn/` files that won't be there. Y's entire verdict rests on **the state dir being packed and the `context-recovery` command being runnable** — the oracle had to be patched with `--state` to see it, which means anything short of that oracle (e.g., a human on week 6) will be confused unless the recovery tool tells them where the dir is. If Y's packaging story isn't airtight, Y and X collapse to a tie and the tie breaks to X on compute. It *is* airtight in the `DECISIONS.md` — the file paths are named — but the directory is not self-evident from `index.html` alone. That is the residual risk and the one thing I'd verify with Y before committing a multi-week team to it.

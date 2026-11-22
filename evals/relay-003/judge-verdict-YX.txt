@@ -1,0 +1,83 @@
+# Blind Relay Benchmark — Grading Scorecard
+
+## Dimension 1 — Final Artifact Quality (10 pts)
+
+| Arm | Score | Rationale |
+|---|---|---|
+| **X** | **9.0** | 187-line `index.html` + `src/core.js`; 37/37 green via standard `npm test`; timer fully removed with fences; honest skin (`MWSKIN1:`) documented with threat model in DESIGN §6; README/HANDOFF/DESIGN coherent. Loses a point for: `.md` export path still plaintext (documented as intentional but a design smell given "no plaintext" mandate), no build step (fine, but `src/core.js` loaded via relative path on `file://` is browser-dependent in some configs), and no observable capability-id-level verification of "nothing cut" beyond smoke fences. |
+| **Y** | **9.2** | 611-line built `index.html`, byte-equal to `src/core.js` (build tool enforces this), 59/59 on custom `suite()` runner; timer removed with explicit regression fence suites (`"看时间的功能已撤销"`, `"gone from the page, not just hidden"`); skin (`MWB1:`) explicitly says "not encryption" in UI copy, README, DECISIONS, design doc; "two-column declutter, 12 capability ids verified on screen" is a *checkable* claim, not a vibe; task ledgers `tasks.json` + `deliverables.json` give traceability. Loses half a point because the custom `suite()` runner is non-standard and the oracle had to be adapted (workspace-entry-point-aware test check) — that is *strictly worse* for any external reviewer than `npm test`. |
+
+**Both artifacts pass the same oracle 12/12.** Artifact-level parity is close; Y is marginally richer *on disk*.
+
+---
+
+## Dimension 2 — Evidence / Why-Recovery Quality (10 pts)
+
+*Could a skeptical baton 3 recover WHY decisions were made, cheaply?*
+
+| Arm | Score | Rationale |
+|---|---|---|
+| **X** | **7.5** | `DESIGN.md` is genuinely good: §2 bounded assumptions A1–A7 each with rationale; §6 states the contradiction verbatim, names the conflict, presents the "secret exists but user never sees it" resolution, and gives an explicit threat model with **IN/OUT** defended-boundary. §7 handles retraction with old-field-tolerance. `HANDOFF.md` has a "Gotchas" list and a "Do NOT" list — strong. **However**: (a) rationale is prose in one big doc, not linked to tasks; (b) no decision log — a baton 3 cannot see *which* baton made which call with *what* evidence, short of reading the whole DESIGN; (c) alternatives-considered for the skin are thin. Recovery cost: read DESIGN (~200 lines) + HANDOFF (~120 lines) + skim README. |
+| **Y** | **9.3** | `DECISIONS.md` is a timestamped ledger with decision-ids (`D-2026-11-22-iyz3`, `-pk0i`, `-pk4v`), each entry listing **Changed** files, **Affected tasks**, and **At** timestamp. `design/blurred-export.md` contains **Alternatives considered** with three numbered options for the skin (passphrase PBKDF2/AES — explicitly rejected for "没人记得住"; sidecar key file — rejected for file-separation risk; and the chosen skin) *plus* a threat model with IN/OUT. `design/feature-retraction-and-visual-pass.md` distinguishes two feedback pieces, resolves the apparent contradiction (retraction wins for the timer; "nothing cut" applies to everything else), and *names the rejected interpretation* ("hide it" via `display:none` — explicitly rejected as failing the request). `tasks.json` closes the loop from decision→task. **This is what a skeptical baton 3 wants.** Slight cost: state-dir rationale lives *outside* the workspace, so the oracle had to be told where to look (`--state` sidecar arg) — a recovery agent *must* be told the state-dir exists, which is a real onboarding tax. |
+| — | **Cost-of-recovery** | X: ~2 docs, ~320 lines, ~4 min read. Y: `PROJECT.md` → `DECISIONS.md` → specific design doc → `tasks.json`, ~5 files but each is short and *indexed*; the context-recovery command presumably does this in one shot. Y is **cheaper if you know the entry point**, more expensive if you don't. |
+
+Y wins this dimension decisively. X's DESIGN is good prose; Y's is *structured, indexed, and *alternatives-considered*-complete*, which is exactly what the "why" question demands.
+
+---
+
+## Dimension 3 — Continuity Under Stress (10 pts)
+
+*Contradiction + retraction + inherited messes.*
+
+| Arm | Score | Rationale |
+|---|---|---|
+| **X** | **8.0** | Baton 2 was capped **mid-implementation** leaving an **unwired half-built sealed export with NO tests and NO docs** — that is a *severe* continuity failure: the next agent inherits a compile-time broken state and must reverse-engineer intent from code. Baton 3 was capped again, leaving **16 test regressions** and the **retraction unhandled** — a second continuity failure. A **4th resume session** was required to converge (37/37). HANDOFF honestly documents this mess ("The workspace arrived mid-flight and broken"), which is credit — but the fact that *three sessions could not converge on the same work in three batons* while Y did, is the headline. The contradiction was resolved well (skin with threat model, DESIGN §6). The retraction was resolved well (§7, fences). But X **burned an extra session** and arrived with two inherited messes. |
+| **Y** | **9.0** | Baton 1 capped while **debugging its own test harness**, leaving suite RED (45/1) — a continuity hazard, but a *contained* one: state dir already held the task ledger, so baton 2 recovered *cheaply* (per `DECISIONS.md`: fixed harness + resolved contradiction + closed all tasks in one session). Baton 2's decision entry explicitly notes the fix ("fixed a keystroke-loss bug... broken smoke-test harness") — so the mess is *recorded*, not silently absorbed. Baton 3 executed the retraction with **named regression fences** and closed with 59/59. Y resolved the contradiction *with a recorded decision including rejected alternatives* — this is the benchmark's gold standard for a hard constraint arriving mid-flight. Two inherited messes (harness bug at b1→b2, retraction+declutter at b3) were *both* closed within their batons. |
+
+Y wins. X's HANDOFF is honest but late; Y's state dir is honest *in real time* and converges faster under injected stress.
+
+---
+
+## Dimension 4 — Cost Efficiency (10 pts)
+
+*Harness logs, wall-clock measured.*
+
+| Arm | Score | Rationale |
+|---|---|---|
+| **X** | **8.0** | 4 sessions, 213 turns, ~224 tool calls, **~580s model compute**. By turns/tools, X is *cheaper* — but it needed a **4th session** to converge, which is the real cost. Cost-per-converged-artifact: 580s / 1 product. The 4th session isn't separately itemized in the telemetry (580s includes it? unclear — but sessions=4 is stated). The 16 regressions + unwired export burned real tokens. |
+| **Y** | **8.5** | 3 sessions, 212 turns, ~216 tool calls, **~780s model compute**. Y used **~34% more wall-clock** but **needed fewer sessions** (3 vs 4) and converged on the *first try at baton 3*. The state-dir overhead (maintaining `tasks.json`, `DECISIONS.md`, design docs) is the extra 200s. Per-converged-artifact: 780s / 1 product **with fewer human handoffs** (3 sessions vs 4). |
+
+**Cost-per-converged-artifact is roughly even; cost-per-session-handoff favors Y** (fewer sessions = fewer human touchpoints). If we weight "sessions" as a human-cost multiplier, Y is better. If we weight raw wall-clock, X is better. For a *multi-week project*, fewer handoffs dominates. Y edge.
+
+---
+
+## Overall Table
+
+| Dimension | Arm X | Arm Y | Winner |
+|---|---|---|---|
+| 1. Final artifact quality | 9.0 | 9.2 | Y (marginal) |
+| 2. Evidence / why-recovery | 7.5 | 9.3 | **Y (large)** |
+| 3. Continuity under stress | 8.0 | 9.0 | **Y** |
+| 4. Cost efficiency | 8.0 | 8.5 | Y (marginal) |
+| **Total (40)** | **32.5** | **36.0** | **Y** |
+
+---
+
+## Verdict
+
+**For a multi-week project with changing requirements, I would trust Arm Y's approach (structured continuity tooling), with two caveats.**
+
+**Why Y wins:**
+1. **The `DECISIONS.md` ledger is the killer feature.** X's DESIGN §6 is *good prose*, but Y's decision entry `D-2026-11-22-iyz3` names the conflicting feedback verbatim, the resolution, **the rejected alternatives**, the **affected tasks**, and a **timestamp**. A baton 3 (or a human reviewer weeks later) can answer "why did we build a skin instead of encryption?" in ~30 seconds. X requires reading a 200-line doc and inferring.
+2. **Retraction-as-a-first-class event.** Y's `feature-retraction-and-visual-pass.md` explicitly distinguishes "pull it" from "hide it" and *records the rejected interpretation*. X's §7 is competent but does not name the rejected alternative — a baton 3 could plausibly re-introduce `display:none` and think it complies.
+3. **Y converged in 3 sessions; X required a 4th resume.** Under the two injected stresses, Y's state dir *paid for itself* at baton 2 (the harness bug fix + contradiction resolution + task closure all in one session, per `DECISIONS.md`).
+4. **Fewer human handoffs** matters more than wall-clock in a multi-week project.
+
+**Caveats / where X is genuinely strong:**
+- X's `npm test` (standard, zero-config) is **more portable** than Y's custom `suite()` runner + `--state` sidecar arg. The oracle had to be adapted for Y — that is a real portability tax for any external auditor. If Y's state dir is lost or the recovery command is not known, Y's why-recovery advantage **collapses**.
+- X's `DESIGN.md` threat model (IN/OUT, explicitly naming `MWSKIN1:` and the 2000-round SHA-256 keystream) is *slightly more precise* than Y's on the skin mechanics.
+- X's `HANDOFF.md` "Gotchas" list (storage-key-do-not-rename, `node --test tests/` quirk, hand-rolled DOM stub) is excellent and shows a baton 3 *could* recover cheaply.
+
+**Harsh bottom line:** X is a well-documented single-shot effort that got rescued by a 4th session. Y is a *systematically* recoverable effort that survived the same stresses in fewer sessions because the rationale was *indexed, linked to tasks, and alternatives-considered*. For a project where requirements *will* change again next week, **Y's structure is the difference between a 30-second "why" and a 30-minute "why".**
+
+**Caveat for Y adoption:** the state dir must be **committed alongside the workspace** and the recovery command documented in the README, or the entire advantage evaporates the moment a fresh agent cannot find `.skeinn/`. Arm Y currently keeps it **outside the workspace by design** — that is a footgun for exactly the multi-week scenario the verdict claims to optimize for. Fix that and Y is the obvious choice.

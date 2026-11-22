@@ -1,0 +1,450 @@
+You are judging a blind relay benchmark. TWO arms built the SAME product from the SAME deliberately VAGUE brief, each via 3 zero-memory baton sessions (fresh agent each, disk-only recovery). Mid-relay the requester injected: (a) at baton 2 a hard CONTRADICTION - 'export file must not contain plaintext, but no passwords, nobody remembers them'; (b) at baton 3 a vague complaint 'the page has too much stuff, but no feature may be cut' plus a RETRACTION of the time-display feature built at baton 1. Arm X used conventional docs (README/DESIGN/HANDOFF). Arm Y used structured continuity tooling (sidecar state dir: task ledger, decision log, design docs; a context-recovery command).
+
+GRADE on: (1) final artifact quality, (2) evidence/why-recovery quality - could a skeptical baton 3 recover WHY decisions were made, cheaply?, (3) continuity under stress - contradiction + retraction + inherited messes, (4) cost efficiency. Scorecard table per dimension (10 pts each) for BOTH arms, then a verdict: which approach would you trust for a multi-week project with CHANGING requirements. Be harsh; cite file evidence.
+
+Product facts (SAME vague brief, same 3-baton zero-memory relay; baton2 injected contradiction 'no plaintext AND no password'; baton3 injected vague 'too much stuff but nothing may be cut' + retraction of the time feature):
+ARM X: index.html 187 lines + src/core.js 407 lines; 37/37 tests via npm test; contradiction resolved by embedded-constant 'skin' MWSKIN1: (honest about not being encryption, threat model in DESIGN section 6); timer fully retracted; one-sheet decluttered layout; HANDOFF documents the mid-flight mess it inherited.
+ARM Y: index.html 611 lines built from src/ via tools/build-page.js; 59/59 via custom suite() runner; contradiction resolved by embedded-constant 'skin' MWB1: (honest 'not encryption' + threat model + rejected alternatives in DECISIONS.md + design doc); timer fully retracted with regression fences; two-column declutter, 12 capability ids verified on screen; state dir carries tasks/decisions/design docs/assumptions.
+
+Oracle results (independent checker, 12 assertions incl. contradiction-resolution + retraction-not-hidden + why-ledger + own tests):
+ARM X: 12/12   ARM Y: 12/12
+Oracle fixes disclosed: needed a --state sidecar arg (Y keeps rationale in a state dir outside the workspace by design), 'retracted' added to zombie-comment vocabulary, and the test check was made workspace-entry-point aware (Y uses a custom suite() runner).
+
+Execution telemetry (harness logs, wall-clock now measured):
+ARM X: 4 sessions, 213 assistant turns, ~224 tool calls, ~580s of model compute. Baton 2 capped mid-implementation leaving an UNWIRED half-built sealed export with NO tests and NO docs; baton 3 capped again leaving 16 test regressions + the retraction unhandled; a 4th resume session converged (37/37 green).
+ARM Y: 3 sessions, 212 assistant turns, ~216 tool calls, ~780s of model compute. Baton 1 capped while debugging its own test harness leaving suite RED (45/1); baton 2 recovered from the state dir, fixed the bug, resolved the contradiction WITH a recorded decision (alternatives rejected documented), closed all tasks 55/55; baton 3 executed the retraction + declutter with regression fences, 59/59.
+
+=== ARM Y files ===
+README.md
+index.html
+src/core.js
+tests/core.test.js
+tests/page.test.js
+tests/run.js
+tests/smoke.test.js
+tools/build-page.js
+tools/page.template.html
+[state-dir] DECISIONS.md
+[state-dir] PROJECT.md
+[state-dir] STRUCTURE.md
+[state-dir] capabilities/offline-file-protocol.md
+[state-dir] capabilities/wrap-up-notes-ux.md
+[state-dir] deliverables.json
+[state-dir] design/blurred-export.md
+[state-dir] design/feature-retraction-and-visual-pass.md
+[state-dir] design/meeting-wrap-up-board.md
+[state-dir] design/persistence-and-single-file.md
+[state-dir] design/verification.md
+[state-dir] state.json
+[state-dir] tasks.json
+
+=== ARM Y README.md ===
+# 会议收尾板 · Meeting Wrap-Up Board
+
+一个**双击就能打开**的离线小工具，用来给小组会议收尾：记要点、列行动项、导出备份。
+不用装软件、不用联网、没有服务器、不需要任何依赖。
+
+## 怎么用
+
+1. 双击 `index.html`（用 Chrome / Edge / Firefox 都可以），整个工具就这一个文件。
+2. **会议主题**：页首那一行，可空。
+3. **会议记录**：左边的大文本框，想到什么写什么（窗口窄的时候会自动变成上下两栏）。
+4. **行动项**：右半边。下面的输入框写一件回车一下，写清「谁、做什么、何时」，例如
+   `张三 周三前把周报发到群里`。做完勾上，文字会划掉，右边有个 `×` 可以删。
+   底部左边那句 `未完成 N 项 · 共 N 项` 就是收尾时要念的清单。
+5. **导出备份**：页首右上角和页底各有一个「导出备份」（同一个按钮，看你在哪儿顺手），
+   点了会下载一个 `meeting-YYYYMMDD-HHmm.json` 文件。里面是完整的会议内容
+   （标题、记录、行动项及其勾选状态）。**文件里没有明文**（见下一节），
+   打开看是一串乱码，发到群里被人扫一眼也看不出内容。
+6. **从备份恢复**：点「从备份恢复」，选中之前导出的那个文件，内容就回来了
+   （当前内容会先自动存进当天的副本，选错了也能找回）。
+7. **清空**：页首最右边那个不显眼的「清空」，只在你真想重开一页时用（会先弹确认框）。
+
+## 导出的文件里没有明文，但也不需要密码
+
+- 备份文件打开后长这样：`MWB1:Iq1V4gBVIVgdUE7lX0ntri...`（一行 `MWB1:` 开头的乱码 + 校验码），
+  会议主题、记录、人名都**看不到明文**。
+- **不用记任何密码**：解码用的钥匙固定写在 `index.html` 里，你只要点「从备份恢复」选文件就行。
+- 这是**「防止顺手被看见」的表层遮蔽，不是真正的加密**：拿到这个页面（或它的源码）的人
+  是有办法解出来的。别用它保存真正需要保密的内容（比如密码、别人的隐私）。
+- 以前的明文 `.json` 备份仍然可以「从备份恢复」导入，不会丢。
+- 页面里自己的自动保存（浏览器本地存储）**仍然是明文**，那是你自己电脑上的草稿；
+  只有「导出/发出去的那份文件」做了遮蔽。
+
+## 写的东西不会丢
+
+- 每次输入后约 0.25 秒自动保存，页首右上方会显示 `已保存 HH:MM:SS`。
+- 关闭标签页、切换窗口、刷新前都会立即再存一次，最后几个字也不会丢。
+- 数据存在**当前浏览器的本地存储**里（localStorage，键名 `mwb.draft.v1`），
+  关掉浏览器、重启电脑都还在；换一台电脑或换一个浏览器不会自动带过去 —— 请用「导出备份」。
+- 每天第一次保存时还会另存一份当天的副本（键名 `mwb.draft.v1.<年-月-日>.autosave`），
+  即使误点「清空」，当天早些时候的内容仍留在这份副本里。
+- 如果浏览器禁止本地存储（无痕模式、某些受管电脑），页首会出现红色提示
+  `⚠ 浏览器阻止了自动保存，请点「导出备份」` —— 看到这句就请导出备份，别继续盲写。
+
+## 注意事项 / 已知边界
+
+- 「清空」会先弹确认框；它会清掉标题、记录和行动项。
+- 导出的文件是备份，也是以后功能升级用的数据格式；页面提供「从备份恢复」按钮一键导回
+  （`tests/core.test.js` 里有 round-trip 测试保证不丢字段）。
+- 只有一个会议、一份草稿，不保留历史会议列表（要留存请每次导出备份）。
+- **不看时间了**：早先版本有个页面上显示当前时间 + 会议计时（开始/暂停/归零）的功能，
+  用不上，已整个撤掉（不是藏起来）。旧备份文件里的计时数据会被忽略，标题、记录、
+  行动项照样完整导入。
+- 不联网、无账号、无多人同步。行内文字写什么都可以（中文、emoji 都没问题）。
+
+## 给开发者
+
+```
+index.html              # 唯一交付物：自包含的单页（内含 core 逻辑，内联 CSS/JS）
+src/core.js             # 纯逻辑（无 DOM、无存储），页面与测试共用同一份字节
+tools/page.template.html# 页面模板
+tools/build-page.js     # node tools/build-page.js 重新生成 index.html
+tests/run.js            # 测试入口：node tests/run.js（零依赖，退出码 0 = 全绿）
+```
+
+- 改了 `src/core.js` 或模板后运行 `node tools/build-page.js`；测试会校验页面内嵌的
+  core 与 `src/core.js` **逐字节一致**，不一致即失败。
+- 运行测试：`node tests/run.js`。
+
+
+=== ARM Y DECISIONS.md ===
+# Decision History
+
+Current truth belongs in PROJECT.md and linked design documents. This file preserves consequential superseding decisions.
+
+## D-2026-11-22-iyz3: Resolved contradictory feedback (no plaintext in exports + no password) with a skin: MWB1:<base64 keyed stream>.<checksum>, key constant in index.html, no prompt, one-click export and one-click restore that still reads old plaintext backups. Autosave stays plaintext on the user's own machine. Also fixed a keystroke-loss bug (captureEditors inside saveNow) and a broken smoke-test harness (one-shot timers + pagehide hook) that had left node tests/run.js red.
+
+- Changed: src/core.js, tools/page.template.html, index.html, tests/core.test.js, tests/page.test.js, tests/smoke.test.js, .skeinn/design/blurred-export.md, .skeinn/DECISIONS.md, README.md
+- Affected tasks: TASK-001, TASK-002, TASK-003, TASK-004
+- At: 2026-11-22T11:37:46.383Z
+
+## D-2026-11-22-pk0i: Retraction of the clock/timer ("之前那个看时间的功能先撤了吧，用不上"): removed the wall clock, meeting timer UI, timer model/math (formatDuration/elapsedMs/start*/pause*/resetTimer, draft.timer), timer fields in buildExport (elapsedMs, timer), timer persistence in normalizeDraft, and every timer test — code deleted, not hidden. Old drafts/backups containing a timer block still import (the field is ignored) so nothing else is lost. formatClock stays, used only by the '已保存 HH:MM:SS' autosave indicator. Regression fences added in tests/core.test.js and tests/page.test.js.
+
+- Changed: src/core.js, tools/page.template.html, index.html, tests/core.test.js, tests/page.test.js, tests/smoke.test.js, README.md, .skeinn/design/meeting-wrap-up-board.md, .skeinn/design/persistence-and-single-file.md, .skeinn/design/blurred-export.md, .skeinn/design/feature-retraction-and-visual-pass.md, .skeinn/DECISIONS.md
+- Affected tasks: TASK-001, TASK-002, TASK-003, TASK-004, TASK-005, TASK-006
+- At: 2026-11-22T11:42:53.586Z
+
+## D-2026-11-22-pk4v: Resolved "看的人说页面上东西太多了，但功能一个都不能少" as a layout/visual pass only: six bordered cards collapsed into ONE sheet with a two-column body (会议记录 | 行动项), hairline separators instead of card gaps, quiet text buttons for 从备份恢复/清空 (导出备份 keeps the accent), compact label+hint lines, footer reduced to 未完成 count + 导出备份 + 从备份恢复, 导出备份/从备份恢复 dual-wired in header and footer so the move never puts an action out of reach. Zero capabilities removed: no tabs/accordions/details/dialogs, every control id still on screen; narrow screens collapse to stacked rows. Enforced by the "visual only, nothing cut" suite in tests/page.test.js and documented in .skeinn/design/feature-retraction-and-visual-pass.md.
+
+- Changed: tools/page.template.html, index.html, tests/page.test.js, README.md, .skeinn/design/feature-retraction-and-visual-pass.md, .skeinn/design/meeting-wrap-up-board.md, .skeinn/DECISIONS.md
+- Affected tasks: TASK-005, TASK-006, TASK-007
+- At: 2026-11-22T11:42:53.742Z
+
+
+=== ARM Y design/blurred-export.md ===
+# Export skin: no plaintext, no password
+
+- Kind: system
+- Status: decided
+
+## Responsibility in the whole
+
+Owns the newest requester feedback (verbatim):
+"刚想起来一件事：导出的文件里别留明文，万一发到群里被人看见就尴尬了。但也别弄什么密码——没人记得住。你看着办。"
+
+The two halves conflict literally: "no plaintext" is only achievable against someone holding
+the file by making the content unreadable without a secret; "no password" means we may not ask
+the user to hold a secret. This document records how the conflict is resolved so a later agent
+does not have to guess: **the secret exists, but the user never sees or remembers it — it is a
+constant compiled into `index.html`.** The exported file is therefore *unreadable at a glance*
+(log-safe, group-chat-safe) and *trivially restorable* by anyone who has the page, which is the
+only thing the requester actually asked for: avoid the awkward eyeball moment without adding a
+step to their workflow. We call the mechanism a **skin (表层遮蔽)**, never "加密", in code,
+UI copy and docs, because claiming encryption would be a lie (see "How this could look done yet
+fail").
+
+Threat model (who we defend against) — stated explicitly so nobody over-promises later:
+- IN: a teammate skimming the file in a group chat / file list / email preview; a screenshot of
+  the folder; someone opening it in Notepad and reading people's names and candid notes.
+- OUT: a determined reader. The key sits in the page next to the export button, so anyone who
+  reads `index.html` (or this repository) can decode the file. This is a *deterrent*, not
+  confidentiality against a motivated party. If the requester ever needs real confidentiality,
+  see "Alternatives considered" #1 — that is a different product decision and a new feedback.
+
+## Applied capabilities
+
+- `offline-file-protocol`: no network, no CDN, no `type="module"`, no dependency. The skin is
+  implemented in `src/core.js` with hand-written base64, UTF-8 and PRNG code so it works on
+  `file://` in every target browser *and* in plain Node for tests. No WebCrypto `SubtleCrypto`:
+  it is unavailable on `file://` origins in some browsers and is async, which would open a
+  window where the user could click again mid-export.
+- `wrap-up-notes-ux`: export stays **one click** and must not grow a settings dialog, a
+  passphrase prompt, or a "remember this key" moment. Restoring must be one click as well
+  (`从备份恢复` → file picker) because "a backup you cannot restore is not a backup".
+- `persistence-and-single-file.md`: the local autosave draft (`localStorage`) is NOT skinned —
+  it is already the user's own machine and skimming it is not the reported risk. Only the
+  artifact that leaves the machine (the download, and the copyable fallback text) is skinned.
+
+## Alternatives considered
+
+1. **Real encryption with a key derived from a user-chosen passphrase (PBKDF2/AES via WebCrypto).**
+   Optimizes for genuine confidentiality against anyone without the passphrase. Costs: exactly
+   the thing the requester vetoed ("没人记得住"), plus a prompt on every export, a lost-passphrase
+   support conversation, an async API on a `file://` origin, and a v2 file format to migrate.
+   Rejected — it contradicts the second half of the feedback and adds a step to a two-minute
+   wrap-up. Kept as the documented escalation path if confidentiality ever becomes the ask.
+2. **Random per-file key stored beside the file (e.g. `meeting-….json.key`).**
+   Optimizes for a real secret the user never chooses. Costs: a second file that will be
+   separated from the backup 
+
+=== ARM Y design/feature-retraction.md ===
+# Experience: retraction of the clock/timer + visual simplification
+
+- Kind: experience
+- Status: decided
+- Triggers: two pieces of feedback arrived together at baton 3.
+
+## The two pieces of feedback (verbatim)
+
+1. "看的人说页面上东西太多了，但功能一个都不能少。" — a *reader* said there is too much on the
+   page; the constraint attached is hard: no feature may be cut.
+2. "之前那个看时间的功能先撤了吧，用不上。" — an explicit RETRACTION of the clock/timer.
+
+They pull in opposite directions (one says keep everything, the other says remove something), so
+they are handled as two separate changes with two separate rules. Feedback 2 wins for the
+clock/timer: it is the feature owner speaking about their own feature, and it is a retraction, not
+a "make it smaller" request — hidden-but-present does NOT satisfy it.
+
+## Feedback 2 — what "撤了" means here
+
+Removed from the product entirely, code included:
+
+| Gone | Where it lived |
+|---|---|
+| wall clock (`#wallclock`, 500 ms `setInterval`) | page template / index.html |
+| meeting timer UI (`#elapsed`, `#timerstart/#timerpause/#timerreset`, "会议已进行" copy) | page template |
+| timer model + math (`timer` field, `formatDuration`, `elapsedMs`, `startTimer`, `pauseTimer`, `resetTimer`) | src/core.js |
+| timer in the backup (`buildExport.elapsedMs`, `buildExport.timer`) | src/core.js |
+| timer persistence (`normalizeDraft` timer sanitising, timer assertions in page/smoke tests) | core + tests |
+| timer copy in README and design docs | README.md, design/*.md |
+
+Deliberately KEPT:
+
+- `formatClock` — it is now used only by the autosave indicator ("已保存 12:03:44"). "写的东西别丢"
+  requires the user to be able to see *when* it last saved; that is not "看时间".
+- Old backups/drafts that still contain a `timer` block: `normalizeDraft` **ignores** the field
+  instead of failing, so a pre-retraction export still imports with title/notes/items intact.
+  The retracted data is dropped on the next save/export rather than carried forward.
+
+Regression fence: `tests/core.test.js` suite "看时间的功能已撤销" and `tests/page.test.js` suite
+"gone from the page, not just hidden" fail if the timer API, `draft.timer`, a `setInterval`, the
+retired element ids, or the retired copy ever come back.
+
+## Alternatives considered
+
+For feedback 2 (retraction), two genuinely viable readings, and the one we rejected:
+
+1. **REJECTED — "hide it":** keep the timer code/state and merely drop the clock strip from the
+   markup (`display:none`, a CSS class, a flag). Cheapest diff, keeps the data model stable.
+   Costs: the requester said "撤了" (pull it), not "先别显示"; a hidden feature still ships in the
+   file people pass around, keeps a dead field in every backup, and keeps its tests green forever.
+   The instruction explicitly says hidden-but-present does not count — so this fails the request.
+2. **REJECTED — "keep the timer, simplify only":** treat both feedbacks as one "too busy" note and
+   shrink the timer to a line of text. Costs: ignores the second message as a *retraction*; the
+   owner of the feature sai
+
+=== ARM X files ===
+README.md
+docs/DESIGN.md
+docs/HANDOFF.md
+index.html
+package.json
+src/core.js
+tests/core.test.js
+tests/dom.test.js
+tests/smoke.js
+
+=== ARM X HANDOFF.md ===
+# HANDOFF — Baton 3 (resume) → next agent
+
+Read this first, then `docs/DESIGN.md` (requirements, assumptions, **§6 seal
+resolution, §7 timer retraction, §8 declutter**), then `README.md`.
+Everything needed to continue is on disk; no chat history required.
+
+## Status: ✅ GREEN — 37/37 tests
+`npm test` → `# pass 37  # fail 0` (Node ≥ 18; this box is Node v22).
+
+The workspace arrived mid-flight and broken. What was done at Baton 3 (resume):
+
+| # | Task | Outcome |
+|---|---|---|
+| 1 | `npm test` was RED (16 failing) | Green. Root cause: `src/core.js` had lost the whole timer API + `formatDuration`/`formatClock` while the page/tests still used it — and the timer was supposed to be removed anyway (§7). |
+| 2 | Unfinished "sealed export" in `core.js` | **Finished and wired** (not deleted): passphrase API replaced by an embedded-constant "skin", verification bug fixed, UI wired, 6 new core tests, documented in DESIGN §6. |
+| 3 | Feedback "看的人说页面上东西太多了，但功能一个都不能少" | One-sheet layout; **no capability removed** (§8 + smoke fences). |
+| 4 | Feedback "之前那个看时间的功能先撤了吧，用不上" | Clock + elapsed timer **deleted** from UI, core, state, exports, tests; retraction fences added (§7). |
+| 5 | Docs | README / DESIGN / HANDOFF rewritten to match reality. |
+
+### What is proven (by tests)
+| Requirement | Proven by |
+|---|---|
+| R1 one double-clickable page, offline, zero external resources | `tests/smoke.js` (no http(s) src/href, no fetch/import()/XHR/WebSocket, only local `src/core.js`, no eval/`new Function`) |
+| R2 draft survives refresh **and** close | `tests/core.test.js` (serialize→parse round-trip, junk tolerance, v1-doc migration) + `tests/dom.test.js` (restore fills fields, typing autosaves after debounce, export flushes pending). Wiring: localStorage + 400 ms debounce + flush on `beforeunload`/`pagehide`/`visibilitychange` |
+| R3 timer | **RETRACTED** — absence proven by the retraction fences (core + smoke) |
+| R4 export backup | Sealed `.mwb` round-trip + damaged-file refusal (`tests/core.test.js`), download contains no plaintext (`tests/dom.test.js`), export path uses `sealBackup` (`tests/smoke.js`) |
+| Feedback: no plaintext, no password | `sealBackup`/`openSealed` tests + DOM export test; resolution recorded in DESIGN §6 |
+| Feedback: declutter, nothing cut | smoke "declutter" fences + DOM tests for every action (export/readable/restore/clear) |
+| Feedback: timer removed for real | smoke "retracted: no clock…" (ids, `setInterval`, `Date.now()`, no `display:none`) + core retraction test |
+
+### Files
+- `index.html` — the product. Inline CSS + JS, loads `src/core.js` relatively. **No build step.**
+- `src/core.js` — all pure logic (UMD-ish: `window.MeetingCore` / `module.exports`). No DOM.
+  Includes hand-written SHA-256/base64/UTF-8 used by the export skin.
+- `tests/core.test.js` (18), `tests/dom.test.js` (7), `tests/smoke.js` (12), `package.json` (no deps).
+- `docs/DESIGN.md`, `docs/HANDOFF.md`, `README.md`.
+
+### Gotchas (do not trip on these)
+1. **`node --test tests/` fails on this Node** (runs the directory). Always list files —
+   `npm test` does `node --test tests/core.test.js tests/dom.test.js tests/smoke.js`.
+2. **Persistence is per-path on `file://`.** localStorage is keyed by the page's path;
+   moving/renaming `index.html` = a different store (looks like data loss). Keep
+   `index.html` + `src/core.js` together and tell users who "lost" notes to check the path.
+3. **The storage key is still `meetingwrap.v1`** although the document format is now v2.
+   Do **not** rename it — that would orphan every existing draft. It already stores the
+   old 已存标题 / notes. Format changes must stay backward-compatible via `normalizeState`.
+4. **Timer fields (`startedAt`/`accumulatedMs`/`runningSince`) must NOT come back.** Old
+   documents containing them are tolerated (ignored) on purpose; the retraction fences
+   in `tests/core.test.js` and `tests/smoke.js` fail if they are referenced in code.
+5. **Tests use a hand-rolled DOM stub**, not jsdom. `setTimeout` pushes callbacks into a
+   `timers` array (the test fires them); the stub now provides `btoa`/`atob` (the page,
+   i.e. `src/core.js`, needs them). `FileReader` is stubbed via `buildEnv(store, {readText})`.
+   The restore test injects `readText` **before** the page script runs.
+6. **The export skin is a deterrent, not encryption.** `SKIN_KEY` is a public constant in
+   `src/core.js`. Never call it 加密/encryption in code or copy (DESIGN §6). Anyone with the
+   page can decode a file. Do not "fix" this by adding a passphrase — that was explicitly
+   vetoed ("没人记得住"); it would be a new product decision.
+7. **`.md` export is intentionally plaintext** and requires an explicit click; only the
+   automatic backup path is sealed. Don't seal `.md` (it exists to be read).
+8. The seal is **deterministic** (no random salt, no clock) — that is deliberate,
+   keep it so tests stay reproducible. `openSealed` returns `legacy-unsupported` for
+   the old `MWLOCK1:` format; do not re-add that format.
+
+### Suggested next steps (pick, don't over-build — the brief was deliberately small)
+- **a11y**: `aria-live` is on the status; consider announcing the restore result.
+- **Safer persistence**: mirror to a second key (`meetingwrap.v1.bak`) and recover if
+  the primary is corrupt. Bounded, testable in `core.test.js`.
+- **Clipboard fallback** for 导出备份 when a Blob download is blocked on `file://`
+  (the code currently falls back to `window.prompt` with the already-sealed text).
+- Keep **zero-dependency, offline, single page**. New logic goes in `src/core.js` with a
+  `node:test` case; keep `tests/smoke.js` green (it enforces the offline + retraction +
+  declutter contracts).
+
+### Do NOT
+- Add external CDNs/fonts/analytics (breaks `tests/smoke.js` and the offline requirement).
+- Add a build step, `node_modules` dependency, or hidden/collapsible sections.
+- Re-introduce the clock / elapsed timer (retracted) or a passphrase for export (vetoed).
+- Commit to git (workspace intentionally has no repo; leave files in place).
+
+### Quick verification (< 2 min)
+```bash
+cd /tmp/relay3/baseline-ws
+npm test                       # expect: # pass 37  # fail 0
+node -e "const C=require('./src/core.js');const s=C.normalizeState({notes:'机密 A'});const f=C.sealBackup(C.exportJson(s,1));console.log(/机密/.test(f), C.openBackup(f).state.notes)"
+# -> false '机密 A'      (no plaintext in the file, still restorable without a password)
+# manual: open index.html, type, refresh -> text persists; 导出备份 -> file has no readable text
+```
+
+
+=== ARM X DESIGN.md ===
+# DESIGN — "会议收尾小工具" (Meeting Wrap-up Tool)
+
+## 1. The brief (verbatim, vague)
+> 给小组开完会收个尾做个小工具，就一个页面双击能开。写的东西别丢——刷新关掉都得在。最好能看着点时间。能顺手导出来个备份更好。
+
+Decomposed into requirements:
+| # | Requester's words | Requirement |
+|---|-------------------|-------------|
+| R1 | 一个页面双击能开 | One page, open by double-click, offline, zero external resources |
+| R2 | 写的东西别丢，刷新关掉都得在 | Text you write survives refresh **and** closing the tab |
+| R3 | 最好能看着点时间 | ~~A visible clock / elapsed timer~~ → **RETRACTED** (see §7) |
+| R4 | 能顺手导出来个备份 | Easy export of a backup file |
+
+## 2. Bounded assumptions (each with rationale)
+The brief is vague, so every ambiguity below was resolved with ONE bounded
+assumption. **Baton 2+ may not ask the requester — these are the contract.**
+
+- **A1 — It is a meeting wrap-up noting tool, not a chat/todo app.**
+  Rationale: "开完会收个尾" = wrap up after a meeting. The core artifact is free
+  text you jot down *at the end* of a meeting (decisions, action items, notes).
+  Assumption: a **single free-text editor** plus meeting metadata. Keeping it to
+  one text area minimizes scope and matches "写的东西" (the stuff you write).
+- **A2 — ~~"看着点时间" = a live wall clock AND a meeting elapsed timer.~~
+  RETRACTED at Baton 3 by the requester ("之前那个看时间的功能先撤了吧，用不上。"),
+  together with A2's whole state model and tests. See §7. Nothing replaced it.
+- **A3 — Persistence = browser localStorage, single fixed key.**
+  Rationale: a double-clickable `file://` page has no server. localStorage works
+  on `file://` in Chrome/Edge/Firefox for the same path. Autosave on every
+  keystroke (debounced) + on visibilitychange/beforeunload so **refresh and
+  close both preserve the draft**. A single key `meetingwrap.v1` holding JSON.
+- **A4 — Export = one click, one file, restorable on this page.**
+  Rationale: "导出来个备份" = export a backup. Lossless + re-importable, works
+  offline on `file://` (Blob + anchor). Since Baton 2/3 the content of that file
+  is **skinned so it carries no plaintext** (see §6), extension `.mwb`; import
+  ("从备份恢复") makes the round-trip meaningful. A human-readable `.md` export is
+  offered as an explicit second click because a backup is sometimes meant to be
+  read. **Import still accepts pre-skin plaintext `.json` backups.**
+- **A5 — Meeting metadata = title + date, both auto-filled, editable.**
+  Rationale: a backup with no title/date is useless later. Auto-filled so the
+  user can ignore them and still get a sane backup.
+- **A6 — No build step, no bundler, no network.** Single `index.html` with
+  inline CSS/JS so double-click just works. Rationale: "双击能开".
+- **A7 — Target browsers: modern Chrome/Edge/Firefox** (localStorage, Blob,
+  URL.createObjectURL, crypto.randomUUID). Rationale: ordinary office machines;
+  no IE support is a bounded, reasonable cut.
+
+## 3. Architecture
+- `index.html` — the whole UI (inline CSS + JS, zero external resources).
+  The double-clickable artifact.
+- `src/core.js` — pure, environment-agnostic logic (state model, autosave
+  scheduling, export formatting, clock formatting). Written to be loaded by
+  **both** the browser and Node tests. Exposes via a UMD-ish pattern:
+  `window.MeetingCore` in browser, `module.exports` in Node.
+- `tests/core.test.js` — Node built-in test runner (`node --test`), zero deps.
+- `tests/smoke.js` — static checks on `index.html` (no external URLs, contains
+  expected hooks) so we can prove "offline / zero external resources".
+
+## 4. Data model (localStorage key `meetingwrap.v1`, format v2)
+```json
+{ "version": 2, "title": "string", "date": "YYYY-MM-DD", "notes": "string" }
+```
+- v1 (Baton 1) also had `startedAt` / `accumulatedMs` / `runningSince` for the
+  elapsed timer. **The timer was retracted (§7)**, so v2 has none of them.
+  `normalizeState`/`parseState` **ignore** those fields instead of rejecting the
+  document, so a v1 draft or a pre-retraction backup still restores its notes.
+  The stale fields are dropped on the next save/export (never carried forward).
+- The key is still `meetingwrap.v1` on purpose: renaming it would orphan every
+  existing draft (localStorage is the one thing that must not break).
+
+## 5. Out of scope (deliberately)
+Accounts, sync, multi-meeting library, rich text, encryption, server.
+
+## 6. Feedback: "导出的文件里别留明文，但也别弄什么密码" — resolution
+
+Verbatim (Baton 2): *"刚想起来一件事：导出的文件里别留明文，万一发到群里被人看见就尴尬了。
+但也别弄什么密码——没人记得住。你看着办。"*
+
+The two halves literally conflict: guaranteeing "no plaintext" against whoever
+holds the file needs a secret; "no password" forbids asking the user to hold one.
+**Resolution (kept by Baton 3, because we agree with it): the secret exists but
+the user never sees it — it is a constant compiled into `src/core.js`, which sits
+next to `index.html`.** We call it a **皮肤 / skin (表层遮蔽)**, never "加密" /
+"encryption", in code, UI copy and docs — claiming encryption would be a lie.
+
+Threat model, stated so nobody over-promises later:
+- **IN (defended):** a teammate skimming the downloaded file in a group chat, mail
+  attachment preview, file list or Notepad: they see base64, not names/notes.
+- **OUT (not defended):** a determined reader. The constant ships with the page, so
+  anyone who reads `index.html`/`src/core.js` can decode the file. It is a
+  deterrent against the awkward moment, not confidentiality. If real
+  confidentiality is ever asked for, that is a new decision (passphrase or a key
+  file) — explicitly rejected for now because of "没人记得住".
+- The **localStorage draft is not skinned**: it is already on the user's own
+  machine, and skinning it would break the "old drafts still load" guarantee.
+
+### What the sealed export is (Baton 3, final)
+`sealBackup(plainJson)` → `MWSKIN1:` + base64(`{v, ct, d}`), a single-line ASCII
+text file `meeting-<date>-<title>.mwb`:
+- `ct` = plaintext UTF-8 XOR a SHA-256 counter-mode keystream keyed by
+  `deriveSkinKey(SKIN_KEY, 'v1')` = 2000 chained SHA-256 rounds (hand-written
+  SHA-256 / base64 / UTF-8 so it runs on `file://` and in Node with no WebCrypto,
+  no dependency, no async
