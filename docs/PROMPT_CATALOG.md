@@ -77,7 +77,7 @@ verdicts:
 
 A `passed` verdict must carry independent review provenance (`review.mode: "independent"` plus a
 `reviewer_id` and evidence that a separate Agent ran the review). A self-review or an unattested pass is
-rejected at record time; a legacy unattested pass blocks `task start` and is an error in `skeinn check` until
+rejected at record time; a legacy unattested pass is an error in `skeinn check` until
 replaced by a fresh review or an explicit `skeinn keeper skip --reason`.
 
 Findings are cumulative across attempts: a pass must carry `closure_results` with evidence for every gap
@@ -85,7 +85,7 @@ still open from earlier rounds, not only the latest attempt's. A changed project
 something changed — never that findings were resolved. There is no auto-pass.
 
 A failed result is injected into the next project-state message. A retry requires changed project truth, a
-new digest, and another fresh Keeper. `skeinn review --help` describes the staging steps for opening that
+changed horizon scope, and another fresh Delta Re-check Keeper. `skeinn keeper --help` describes Launch and Checkpoint handoffs.
 fresh Agent without inherited conversation.
 
 ## Evil Eval messages
@@ -118,7 +118,7 @@ Task; those are selected when the behavior, human request, or repository workflo
 
 ## CLI operational messages
 
-`skeinn --help` is the complete command-oriented message surface. `skeinn review` and `skeinn review --help` are
+`skeinn --help` is the complete command-oriented message surface. `skeinn keeper --help` and `skeinn help prompts` are
 the read-only entry points an Agent uses to stage an independent Keeper handoff; `skeinn keeper --help` covers
 `keeper prompt`, `keeper record`, and `keeper skip`. JSON command results report state and the next
 host action. Validation errors are contract enforcement rather than cognitive prompts; they reject unsafe

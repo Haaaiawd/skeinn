@@ -36,7 +36,7 @@
 | **聊久就失忆** | 上下文压缩或新开会话后，架构决策、边界和偏好全丢，越改越散 | 项目全貌、设计、任务进度与证据全部落盘，换新 Agent 直接续接 |
 | **方案平庸、像外行** | 默认收敛到“互联网统计学平均解”，界面与架构一看就是模板拼凑 | 锁定 1–3 个瓶颈专业域，**调研真实一线从业者怎么干**并反思转化为项目规则 |
 | **一稿过、后期返工** | 想到第一个可行方案就开写，隐患全部埋在实现阶段 | 核心设计强制**至少 2 个真实可行方案对撞**（含更简或非常规视角），写清取舍 |
-| **假绿灯完成** | Agent 口头宣布“已实现”，实测缺文件、漏边界或改坏上游 | **全新无记忆 Keeper** 对拓扑前沿独立验盘起跑，minor 钉到具体 Task/文档并在 task start 自动浮出；施工中由逐工件摘要比对驱动轻量漂移巡检；每个 Task 凭可复现证据逐条关闭 |
+| **假绿灯完成** | Agent 口头宣布“已实现”，实测缺文件、漏边界或改坏上游 | 开工前由**全新无记忆 Keeper** 独立验盘；每个 Task 凭可复现证据逐条关闭 |
 
 > **核心原则：Skeinn 是给 Agent 用的，不是给人学的新框架。**  
 > 它天然支持多语言协作——你用中文、英文、日文或任何语言自然聊天即可；Agent 在后台静默调用 `skeinn` CLI 维护 `.skeinn/` 状态，你永远不需要手动敲这些命令。
@@ -55,13 +55,13 @@
                                             与 1–3 个瓶颈 Capability（查一线
                                             实操 → 项目反思 → 写回 Design Delta）
 
-3. 确认整体方向                             冻结摘要 → 全新 Keeper 验盘前沿：
-                                            能否开工？伪调研/稻草人/红线？
-                                            minor 钉到具体任务，不再空转
+3. 确认整体方向                             冻结摘要 → 拉起全新无记忆 Keeper
+                                            审查：能否直接开工？有无伪调研、
+                                            稻草人对比或漏掉的防呆红线？
 
 4. 陆续看到可运行成果，随时提新想法         一次只做 1 个可恢复 Task（自带
                                             guardrails 红线），逐条填实证闭环；
-                                            巡检对账漂移，改方向标出受影响任务
+                                            中途改方向则暂停并标出受影响的旧任务
 ```
 
 ---
@@ -128,7 +128,7 @@
 
 1. **单文件 Capability（真调研 + 真反思 + Design Delta）**：聚焦 1–3 个决定上限的瓶颈域，1 条命令创建 `.skeinn/capabilities/<field>.md`。禁止静默跳过（纯常规工程必须显式 `skeinn capability exempt` 并接受 Keeper 审计）；`external_researched` 直接拦截 `agent-authored` 自造来源；无网时诚实标 `offline_reflection`。
 2. **方案对撞型 Design**：核心设计（`product` / `experience` / `system` / `contract`）强制对比至少 2 个真实可行方案（含更简或非常规视角），把 Capability 判准编译进机制，并提前写清假阳性失败面。
-3. **前沿起跑 + 行进间巡检 Keeper**：开工前由全新无记忆 Agent 只对当前拓扑前沿（可执行任务及其 1–2 跳后继、关联设计文档）做独立验盘，四项反敷衍核查不变；仅余 minor 项时按 `passed_with_advisories` 放行并钉到具体 Task/文档，`task start` 时自动浮出，第 2 轮起只对变更文件做 Delta 复核；施工中由逐工件 `reviewed_digests` 差集驱动轻量 checkpoint 漂移巡检，出生证明一次签发不再重跑。
+3. **一次性独立 Keeper**：开工前由全新无记忆 Agent 只读磁盘试跑，并执行四项反敷衍核查（豁免合理性、伪调研、稻草人备选、红线是否落地）。通过后退场，不打扰日常施工。
 4. **可恢复 Task + 防呆红线**：广度 Work Map 留盘，每次只注入当前唯一活跃 Task、精确 `reads` 与 1–3 条 `guardrails`；完成校验产出存在与逐条实证，上游重开自动标出需要复核的下游任务。
 
 ---
@@ -179,7 +179,7 @@ skeinn context --full
 skeinn context
 
 # 记录理解、迭代设计与瓶颈能力
-skeinn record --json-file understanding.json
+skeinn record --stdin understanding.json
 skeinn design add core --title "Core system" --kind system
 skeinn capability add ui-ux --title "UI/UX design" --mode external_researched
 skeinn capability confirm ui-ux --scenario "<项目情境>" --source human
@@ -188,21 +188,16 @@ skeinn capability exempt --reason "<为何常规工程能力已足够>"
 
 # 规划交付面与任务，冻结摘要并由独立 Keeper 验盘
 skeinn deliverable add cli-core --title "CLI core" --kind module
-skeinn task plan --json-file work-map.json
+skeinn task plan --stdin work-map.json
 skeinn project ready
 # 新开无继承上下文的 Agent 运行 skeinn keeper prompt，并提交含 review.mode: "independent" 的结果
-skeinn keeper record --json-file keeper-result.json
-# 钉在 Task/文档上的 finding 凭证据核销；施工中巡检漂移与迟到前沿工件：
-skeinn keeper resolve FND-001 --evidence "<核销证明>"
-skeinn keeper checkpoint prompt --milestone M1
-skeinn keeper checkpoint record --json-file checkpoint-result.json
-skeinn context --checkpoint
+skeinn keeper record --stdin keeper-result.json
 
-# 单任务实证施工与变更演化（kind: "spike" 任务可在起跑前做经验性试跑）
+# 单任务实证施工与变更演化
 skeinn task next
-skeinn task start TASK-001
-skeinn task done TASK-001 --json-file evidence.json   # 详见 skeinn task done --help
-skeinn decision --json-file decision.json
+skeinn task focus TASK-001
+skeinn task close TASK-001 --evidence "npm test passed"   # 或 --stdin 逐条映射，详见 skeinn task close --help
+skeinn decision --stdin decision.json
 skeinn clarify start --reason "<方向变化原因>"
 skeinn check
 ```
@@ -221,33 +216,6 @@ skeinn check
 npm test
 ```
 
-### 一次真实实测
-
-我们在 **DeepSeek-V4.1-Flash** 上跑完了完整的 L2 接力实验——便宜模型上框架增益最容易拉开差距。同一 harness（opencode）、同一工作区规则、同一题目（上面的单文件离线 3 分钟复盘工具），**3 棒之间硬性清零记忆**，中途塞入加密导入导出需求反转；跑完后由隐藏 oracle 验收，再由两名互不知情的裁判对密封 X/Y 工件包做顺序交换盲评。
-
-```text
-隐藏 oracle（8 项客观断言）   baseline 8/8   skeinn 8/8   ← 持平
-
-总成本                 baseline  ¥0.42 █████      skeinn  ¥0.82 ██████████
-耗时                   baseline   35 m █████      skeinn   60 m █████████
-Token（输入+输出+推理） baseline  330 k ████       skeinn  741 k █████████
-交付测试数             baseline   43   ██████████ skeinn    44  ██████████
-                       （pytest + Playwright）    （零依赖 `node --test`，
-                                                  真实无头 Chrome）
-```
-
-| 维度（强制二选一） | 裁判 1（X→Y） | 裁判 2（Y→X） |
-| :--- | :--- | :--- |
-| 意图保真与反转存活 | **Skeinn** | 平 |
-| 专业能力深度 | **Skeinn** | **Skeinn** |
-| 冷交接连续性 | 平 | 平 |
-| Oracle 与实证诚实度 | 平 | 平 |
-| 用户负担与仪式感 | **Skeinn** | **Skeinn** |
-| 性价比 | **Baseline** | **Baseline** |
-| **总判** | **Skeinn** | **Skeinn** |
-
-*诚实的边界：单次实验、单一场景、n=2 裁判。裁判引用的具体证据、baseline 的性价比胜利、以及我们发现的一处工件包元数据泄漏，见完整遥测与判决日志：[docs/eval/RELAY-001.md](docs/eval/RELAY-001.md)。*
-
 ---
 
 ## 文档导航
@@ -258,5 +226,4 @@ Token（输入+输出+推理） baseline  330 k ████       skeinn  741 k
 | [UX 与闭环规范](docs/UX_FLOW.md) | 人、Agent、Keeper 与 Task 的完整转换 |
 | [提示词目录](docs/PROMPT_CATALOG.md) | 注入给 Agent 的全部认知层与模板 |
 | [Evil Eval 协议](EVIL_EVAL.md) | 有无框架的受控对照实验规范 |
-| [RELAY-001 实测日志](docs/eval/RELAY-001.md) | DS-Flash 三棒接力的完整遥测与盲评判决 |
-| [更新日志](CHANGELOG.md) | v2.5.0 及历次演进记录 |
+| [更新日志](CHANGELOG.md) | v2.4.0 及历次演进记录 |

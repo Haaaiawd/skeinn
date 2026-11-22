@@ -110,20 +110,14 @@ a unique `run_id`, attempt number, and prepared digest.
 Keeper tests whether it can explain the whole, navigate every necessary design system, locate distinct professional capabilities, select the correct first Task, find all context,
 name the first concrete action, and reproduce completion evidence.
 
-### Passed / passed_with_advisories
+### Passed
 
 A pass requires independent review provenance (`review.mode: "independent"`, reviewer identity, evidence) and
 `closure_results` covering every finding still open across all earlier attempts. A changed digest alone never
 closes a finding. When no separate Agent is available, the maintainer records an explicit
 `skeinn keeper skip --reason` instead of simulating a pass.
 
-Blocking findings inside the active horizon return `needs_revision`; minor-only findings pass as
-`passed_with_advisories` — each is pinned to a `scope` (a Task id or `.skeinn/` doc path) and automatically
-surfaces at `skeinn task start` when that Task or the docs it reads/implements are involved, closing via
-`skeinn keeper resolve <id> --evidence`.
-
-State becomes `build_ready`. Launch is a one-time birth certificate (`launch_completed`); it never reopens on
-later edits — in-flight checkpoints carry legitimacy forward.
+State becomes `build_ready`. Keeper leaves the normal workflow permanently; Task evidence now carries delivery quality.
 
 ### Needs revision or blocked
 
@@ -132,8 +126,6 @@ as the highest-priority uncertainty.
 
 The main Agent decides where the gap belongs, repairs everything it can, asks the human only for decisions they genuinely own,
 changes the relevant disk truth, runs `skeinn project ready` again, and opens a new Keeper run with a new run_id and digest.
-Round 2+ is a scope-bounded delta re-check: the Keeper sees only unclosed blocking findings plus artifacts changed by the
-repair; two consecutive rounds that fail to reduce the blocking count halt the loop (unlockable via `--force-round --reason`).
 
 Skeinn refuses an unchanged revision, a duplicate run_id, a result for the wrong digest, and a result written before ready.
 
@@ -147,7 +139,7 @@ exact design, capability, source, contract, and fixture files in `reads`—not t
 - A local failure keeps the Task active. Update progress and evidence, repair, and test again.
 - A missing permission, dependency, or upper-level contradiction uses `task block` with a reason and recovery conditions. `skeinn context` surfaces each blocked Task with its reason and recovery conditions until it is resolved.
 - After the condition is repaired, use `task reopen --reason` describing how the recovery conditions were met, then start it again. A prior `done` may also be reopened with a concrete reason when its evidence is disproven; a done Task cannot be silently rewritten by `task update`.
-- `task done` requires a check quoting every exact `done_when` criterion and mapping it to concrete evidence.
+- `task close` accepts `--evidence "<proof>"` (auto-mapped to all acceptance criteria) or `--stdin` for per-criterion mapping, derives `actual_touches` from Git, and enforces the heavy Review Window gate.
 - Generic update cannot modify status, and imported Tasks must begin open.
 
 When a Task is done, the Agent chooses the next dependency-ready Task. When every Task is done, project status becomes complete
@@ -157,9 +149,8 @@ and the Agent delivers the real result, evidence, remaining tradeoffs, and any u
 
 New user information is first evaluated for impact. A local reversible implementation detail updates the active Task. A change
 to the desired whole updates PROJECT.md and affected design documents, records a superseding decision, revises affected Task definitions, and blocks or reopens
-the active Task as needed. Design edits via `decision` and distant docs entering the horizon become `dirty` artifacts surfaced
-by `skeinn check`; `skeinn keeper checkpoint prompt|record` runs a lightweight fresh review on just that slice (drift reconcile,
-new-horizon verification, advisory closure), and five delivery Tasks since the last clean review raise a silent-drift watch.
+the active Task as needed. The one-time Keeper does not return after initial build-readiness; implementation evidence and explicit
+human authority govern later changes.
 
 ## Recovery matrix
 
@@ -177,9 +168,6 @@ new-horizon verification, advisory closure), and five delivery Tasks since the l
 | Attempt to mark done without evidence | CLI rejects it |
 | Evidence disproves an earlier done state | Reopen with a reason, then repair, re-verify, or block |
 | Host cannot spawn Keeper | Ask the human to open a new window with one short prompt |
-| Design/code drift suspected mid-build | `skeinn keeper checkpoint prompt` — fix code or record `skeinn decision`, never silent drift |
-| Pinned blocking finding at task start | Close it with `skeinn keeper resolve <id> --evidence "<proof>"` |
-| Full-direction pivot | `skeinn keeper reset --reason` clears reviewed digests and reopens Launch |
 
 ## Flow diagrams
 

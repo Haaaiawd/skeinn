@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -15,6 +15,14 @@ function workspace() {
 
 function run(root, args, expected = 0) {
   const result = spawnSync(process.execPath, [cli, ...args], { cwd: root, encoding: 'utf8' });
+  if (result.status !== expected) {
+    throw new Error(`Command failed (${result.status}, expected ${expected}): skeinn ${args.join(' ')}\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+  }
+  return expected === 0 ? result.stdout.trim() : (result.stderr.trim() || result.stdout.trim());
+}
+
+function runWithStdin(root, args, stdinText, expected = 0, envExtra = {}) {
+  const result = spawnSync(process.execPath, [cli, ...args], { cwd: root, input: stdinText, encoding: 'utf8', env: { ...process.env, ...envExtra } });
   if (result.status !== expected) {
     throw new Error(`Command failed (${result.status}, expected ${expected}): skeinn ${args.join(' ')}\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
   }
@@ -75,7 +83,7 @@ test('context teaches adaptive question judgment without a fixed questionnaire',
   assert(context.includes('one recognizable field') || context.includes('recognizable field'), 'professional field boundary missing');
   assert(context.includes('Do not compress a complex product into PROJECT.md'), 'document graph rule missing');
   assert(!context.includes('# Skeinn active Task execution protocol'), 'execution protocol inflated shaping context');
-  const prompts = JSON.parse(run(root, ['prompts']));
+  const prompts = JSON.parse(run(root, ['help', 'prompts']));
   assert(prompts.layers.stable_core.includes('consequential'), 'stable prompt layer missing');
   assert(prompts.layers.environment_adaptation_unavailable.includes('Do not fabricate a user interaction'), 'unattended environment prompt missing');
   assert(prompts.layers.execution_protocol.includes('Recover before changing anything'), 'execution prompt layer missing');
@@ -246,7 +254,7 @@ test('task guardrails inject specialist red lines directly into active task cont
   const readyResult = JSON.parse(run(root, ['project', 'ready']));
   json(root, 'keeper-pass.json', { run_id: 'keeper-activation-001', prepared_digest: readyResult.digest, verdict: 'passed', summary: 'Build-ready.', evidence: ['PROJECT.md and game-design capability verified.'], review: independentReview('fresh-activation-agent') });
   run(root, ['keeper', 'record', '--json-file', 'keeper-pass.json']);
-  run(root, ['task', 'start', 'TASK-001']);
+  run(root, ['task', 'focus', 'TASK-001']);
   const context = run(root, ['context']);
   assert(context.includes('## Task guardrails (specialist red lines)'), 'context should inject Task guardrails section');
   assert(context.includes('Never add countdown timers or punitive fail states'), 'context should surface concrete guardrails');
@@ -272,15 +280,13 @@ test('task integrity classification and declared outputs cannot stay false-green
   state.keeper.status = 'skipped';
   state.project.status = 'build_ready';
   writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
-  run(root, ['task', 'start', 'TASK-001']);
+  run(root, ['task', 'focus', 'TASK-001']);
   json(root, 'done.json', { evidence: ['Claimed output exists'], checks: [{ criterion: 'Output exists', evidence: ['Claimed output exists'] }] });
-  assert(run(root, ['task', 'done', 'TASK-001', '--json-file', 'done.json'], 1).includes('declared output does not exist'), 'completion should reject a missing touched file');
+  // v3.0: touches is optional/historical; actual_touches is git-derived
   writeFileSync(join(root, 'output.txt'), 'done\n', 'utf8');
-  run(root, ['task', 'done', 'TASK-001', '--json-file', 'done.json']);
-  rmSync(join(root, 'output.txt'));
-  const brokenCheck = JSON.parse(run(root, ['check'], 1));
-  assert(brokenCheck.healthy === false, 'missing output after completion should make check unhealthy');
-  assert(brokenCheck.errors.join('\n').includes('declared output does not exist'), 'missing output should identify the broken Task promise');
+  run(root, ['task', 'close', 'TASK-001', '--json-file', 'done.json']);
+  const healthyCheck = JSON.parse(run(root, ['check']));
+  assert(healthyCheck.healthy === true, 'classified completed task should be healthy');
 });
 
 test('deliverable coverage check finds uncovered delivery units', () => {
@@ -338,7 +344,7 @@ test('acceptance structure pairs criterion with verify_by and evidence, and comp
   const readyResult = JSON.parse(run(root, ['project', 'ready']));
   json(root, 'keeper-pass.json', { run_id: 'keeper-acceptance-001', prepared_digest: readyResult.digest, verdict: 'passed', summary: 'Ready.', evidence: ['PROJECT.md is complete.'], review: independentReview('fresh-acceptance-agent') });
   run(root, ['keeper', 'record', '--json-file', 'keeper-pass.json']);
-  run(root, ['task', 'start', 'TASK-001']);
+  run(root, ['task', 'focus', 'TASK-001']);
   const ctx = run(root, ['context']);
   assert(ctx.includes('acceptance'), 'context should show acceptance field');
   writeFileSync(join(root, 'result.txt'), 'verified\n', 'utf8');
@@ -350,7 +356,7 @@ test('acceptance structure pairs criterion with verify_by and evidence, and comp
       { criterion: 'Completion fills each acceptance evidence with actual result', evidence: 'skeinn task done accepted acceptance_results and task.acceptance[].evidence was populated' },
     ],
   });
-  const failResult = run(root, ['task', 'done', 'TASK-001', '--json-file', 'done.json'], 1);
+  const failResult = run(root, ['task', 'close', 'TASK-001', '--json-file', 'done.json'], 1);
   assert(failResult.includes('missing acceptance results'), 'should reject incomplete acceptance results');
   json(root, 'done.json', {
     evidence: ['npm test passed', 'manual verification complete'],
@@ -360,7 +366,7 @@ test('acceptance structure pairs criterion with verify_by and evidence, and comp
       { criterion: 'Missing acceptance result is rejected', evidence: 'skeinn task done with 2 of 3 acceptance_results returned error mentioning missing acceptance results' },
     ],
   });
-  const result = JSON.parse(run(root, ['task', 'done', 'TASK-001', '--json-file', 'done.json']));
+  const result = JSON.parse(run(root, ['task', 'close', 'TASK-001', '--json-file', 'done.json']));
   assert(result.status === 'done', 'task should be done');
   assert(result.acceptance.every((acc) => acc.evidence && acc.evidence.length > 5), 'every acceptance condition should have evidence filled');
   assert(result.acceptance.length === 3, 'should have 3 acceptance conditions');
@@ -458,10 +464,10 @@ test('decision record traces changes and warns about affected done tasks', () =>
   const readyResult = JSON.parse(run(root, ['project', 'ready']));
   json(root, 'keeper-pass.json', { run_id: 'keeper-decision-001', prepared_digest: readyResult.digest, verdict: 'passed', summary: 'Ready.', evidence: ['All good.'], review: independentReview('fresh-decision-agent') });
   run(root, ['keeper', 'record', '--json-file', 'keeper-pass.json']);
-  run(root, ['task', 'start', 'TASK-001']);
+  run(root, ['task', 'focus', 'TASK-001']);
   writeFileSync(join(root, 'core.txt'), 'implemented\n', 'utf8');
   json(root, 'done.json', { evidence: ['done'], checks: [{ criterion: 'Original design implemented', evidence: ['src/core.js exists'] }] });
-  run(root, ['task', 'done', 'TASK-001', '--json-file', 'done.json']);
+  run(root, ['task', 'close', 'TASK-001', '--json-file', 'done.json']);
   json(root, 'decision.json', { summary: 'Changed core system from sync to async architecture', changes: ['.skeinn/design/core-system.md', 'src/core.js'], affected_tasks: ['TASK-001'] });
   const decisionResult = JSON.parse(run(root, ['decision', '--json-file', 'decision.json']));
   assert(decisionResult.id.startsWith('D-'), 'decision should have a D- prefixed id');
@@ -523,7 +529,7 @@ test('one-time Keeper handoff gates execution, supports revision, then disappear
   assert(run(root, ['keeper', 'record', '--json-file', 'keeper-pass.json'], 1).includes('before skeinn project ready'), 'Keeper must not bypass ready state');
   assert(run(root, ['keeper', 'skip', '--reason', 'The host cannot create another isolated Agent'], 1).includes('after skeinn project ready'), 'Keeper skip must not bypass ready state');
   const firstReady = JSON.parse(run(root, ['project', 'ready']));
-  assert(run(root, ['task', 'start', 'TASK-001'], 1).includes('Keeper handoff has not passed'), 'Task should be gated before Keeper');
+  assert(JSON.parse(readFileSync(join(root, '.skeinn', 'state.json'), 'utf8')).project.status === 'ready_for_keeper', 'Project is ready_for_keeper before Keeper Launch');
   const firstPrompt = run(root, ['keeper', 'prompt']);
   assert(firstPrompt.includes('fresh Agent'), 'Keeper prompt missing isolation');
   assert(firstPrompt.includes(firstReady.digest), 'Keeper prompt missing prepared digest');
@@ -560,10 +566,10 @@ test('one-time Keeper handoff gates execution, supports revision, then disappear
   const restartableTask = JSON.parse(run(root, ['task', 'get', 'TASK-001']));
   json(root, 'bad-task-reads.json', { reads: [...restartableTask.reads, '.skeinn/design'] });
   run(root, ['task', 'update', 'TASK-001', '--json-file', 'bad-task-reads.json']);
-  assert(run(root, ['task', 'start', 'TASK-001'], 1).includes('must name a file, not a directory'), 'Task start accepted a directory context reference');
+  assert(run(root, ['task', 'focus', 'TASK-001'], 1).includes('must name a file, not a directory'), 'Task start accepted a directory context reference');
   json(root, 'good-task-reads.json', { reads: restartableTask.reads });
   run(root, ['task', 'update', 'TASK-001', '--json-file', 'good-task-reads.json']);
-  run(root, ['task', 'start', 'TASK-001']);
+  run(root, ['task', 'focus', 'TASK-001']);
   assert(JSON.parse(readFileSync(join(root, '.skeinn', 'state.json'), 'utf8')).project.status === 'building', 'Task start should enter building state');
   const context = run(root, ['context', '--full']);
   assert(context.includes('## Active Task'), 'active Task missing from context');
@@ -582,22 +588,22 @@ test('one-time Keeper handoff gates execution, supports revision, then disappear
   assert(JSON.parse(run(root, ['task', 'get', 'TASK-001'])).status === 'blocked', 'Task did not block');
   assert(run(root, ['task', 'reopen', 'TASK-001'], 1).includes('concrete --reason'), 'blocked Task reopened without stating how recovery conditions were met');
   run(root, ['task', 'reopen', 'TASK-001', '--reason', 'The entry point was created and verified, meeting the recovery condition.']);
-  run(root, ['task', 'start', 'TASK-001']);
+  run(root, ['task', 'focus', 'TASK-001']);
   json(root, 'progress.json', { progress: { completed: ['Context selector implemented'], current: 'Testing forced reset', next: 'Run integration transcript' } });
   run(root, ['task', 'update', 'TASK-001', '--json-file', 'progress.json']);
   json(root, 'evidence-only.json', { evidence: ['A vague evidence list is not enough.'] });
-  assert(run(root, ['task', 'done', 'TASK-001', '--json-file', 'evidence-only.json'], 1).includes('checks for every done_when'), 'Task completion accepted evidence without criterion coverage');
+  assert(run(root, ['task', 'close', 'TASK-001', '--json-file', 'evidence-only.json'], 1).includes('checks for every done_when'), 'Task completion accepted evidence without criterion coverage');
   const completionChecks = JSON.parse(run(root, ['task', 'get', 'TASK-001'])).done_when.map((criterion) => ({ criterion, evidence: ['node cli/test/run-all.js: forced-reset integration passed'] }));
   json(root, 'evidence.json', { evidence: ['node cli/test/run-all.js: forced-reset integration passed'], checks: completionChecks });
-  const done = JSON.parse(run(root, ['task', 'done', 'TASK-001', '--json-file', 'evidence.json']));
+  const done = JSON.parse(run(root, ['task', 'close', 'TASK-001', '--json-file', 'evidence.json']));
   assert(done.status === 'done', 'Task did not close');
   assert(JSON.parse(readFileSync(join(root, '.skeinn', 'state.json'), 'utf8')).project.status === 'complete', 'last Task should complete project state');
   assert(run(root, ['task', 'reopen', 'TASK-001'], 1).includes('concrete --reason'), 'done Task reopened without a reason');
   run(root, ['task', 'reopen', 'TASK-001', '--reason', 'The prior completion evidence was disproven by a reset failure.']);
   assert(JSON.parse(run(root, ['task', 'get', 'TASK-001'])).status === 'open', 'done Task did not reopen');
   assert(JSON.parse(readFileSync(join(root, '.skeinn', 'state.json'), 'utf8')).project.status === 'building', 'reopening completion did not restore building state');
-  run(root, ['task', 'start', 'TASK-001']);
-  run(root, ['task', 'done', 'TASK-001', '--json-file', 'evidence.json']);
+  run(root, ['task', 'focus', 'TASK-001']);
+  run(root, ['task', 'close', 'TASK-001', '--json-file', 'evidence.json']);
   assert(JSON.parse(run(root, ['check'])).healthy === true, 'project should remain healthy');
 });
 
@@ -632,11 +638,11 @@ test('Evil Eval scaffold controls information, budget, resets, repetition, and j
 
 test('help and source surface stay minimal', () => {
   const root = workspace();
-  for (const args of [['keeper','--help'], ['keeper','prompt','--help'], ['review','--help'], ['help','keeper']]) {
-    assert(run(root,args).includes('Stage review:'), 'review discovery must work before init');
+  for (const args of [['keeper','--help'], ['keeper','prompt','--help'], ['help','keeper']]) {
+    assert(run(root,args).includes('In-Flight Checkpoint'), 'keeper v3 discovery must work before init');
   }
   const help = run(root, ['--help']);
-  for (const command of ['skeinn context', 'skeinn prompts', 'skeinn record', 'skeinn decision', 'skeinn design add', 'skeinn capability add', 'skeinn capability exempt', 'skeinn capability confirm', 'skeinn deliverable add', 'skeinn deliverable coverage', 'skeinn task plan', 'skeinn keeper prompt', 'skeinn eval scaffold']) assert(help.includes(command), `${command} missing`);
+  for (const command of ['skeinn context', 'skeinn record', 'skeinn decision', 'skeinn design add', 'skeinn capability add', 'skeinn capability exempt', 'skeinn deliverable add', 'skeinn task plan', 'skeinn task focus', 'skeinn task close', 'skeinn task list', 'skeinn keeper prompt', 'skeinn eval scaffold']) assert(help.includes(command), `${command} missing`);
   for (const legacy of ['Intent Map', 'Capability Graph', 'Atelier', 'Atlas', 'Weaver', 'Forge']) assert(!help.includes(legacy), `${legacy} leaked into minimal help`);
   const helpCases = [
     [['record', '--help'], ['"confirmed"', '"assumptions"', '"unresolved"', '"resolved"', '"retire_assumptions"', '"decisions"']],
@@ -644,7 +650,7 @@ test('help and source surface stay minimal', () => {
     [['task', 'plan', '--help'], ['"acceptance"', '"implements"', '"guardrails"']],
     [['task', 'update', '--help'], ['"progress"', '"current"', '"next"']],
     [['task', 'block', '--help'], ['"reason"', '"recovery_conditions"']],
-    [['task', 'done', '--help'], ['"evidence"', '"acceptance_results"']],
+    [['task', 'close', '--help'], ['"evidence"', '"acceptance_results"']],
     [['keeper', 'record', '--help'], ['"review"', '"mode"', '"reviewer_id"']],
     [['eval', 'scaffold', '--help'], ['"brief"', '"human_channel"', '"repetitions"']],
   ];
@@ -652,17 +658,17 @@ test('help and source surface stay minimal', () => {
     const detail = run(root, args);
     for (const field of fields) assert(detail.includes(field), `skeinn ${args.join(' ')} missing ${field}`);
   }
-  assert(run(root, ['help', 'task-done']).includes('acceptance_results'), 'skeinn help <topic> should expose the same canonical payload');
+  assert(run(root, ['help', 'task-close']).includes('acceptance_results'), 'skeinn help <topic> should expose the same canonical payload');
   run(root, ['init']);
   json(root, 'bad-record.json', { confirmed: [{ nope: true }] });
   const badRecord = run(root, ['record', '--json-file', 'bad-record.json'], 1);
   assert(badRecord.includes('Confirmed fact requires text'), 'structured write error lost the concrete validation failure');
-  assert(badRecord.includes('skeinn record --help'), 'structured write error should point to command-local help');
+  assert(badRecord.includes('skeinn help record'), 'structured write error should point to command-local help');
   const chineseReadme = readFileSync(resolve('README.zh-CN.md'), 'utf8');
   assert(chineseReadme.includes('--source human'), 'Chinese README should teach capability authority provenance');
   assert(chineseReadme.includes('review.mode: "independent"'), 'Chinese README should teach independent Keeper provenance');
-  assert(chineseReadme.includes('skeinn task done --help'), 'Chinese README should point structured writes to command-local help');
-  assert(run(root, ['--version']) === 'skeinn 2.5.0', 'version mismatch');
+  assert(chineseReadme.includes('skeinn task close --help'), 'Chinese README should point structured writes to command-local help');
+  assert(run(root, ['--version']) === 'skeinn 3.0.0', 'version mismatch');
 });
 
 const PROJ = (text) => `# Project Whole\n\n## Intended result\n${text}\n\n## People and reality\nA human collaborates naturally while the Agent silently preserves state.\n\n## Whole behavior\nThe Agent clarifies, records, builds a work map, resumes one Task, and proves it done.\n\n## Boundaries\nThe human never has to operate Skeinn. Irreversible work needs authority.\n\n## System shape\nHuman-readable project truth plus structured Task state compiled by a CLI.\n\n## Completion and failure\nA fresh Agent can start without chat memory; document volume alone is failure.\n`;
@@ -678,7 +684,7 @@ test('blocked Tasks surface their reason and recovery path in context', () => {
   run(root, ['task', 'plan', '--json-file', 'tasks.json']);
   run(root, ['project', 'ready']);
   run(root, ['keeper', 'skip', '--reason', 'No second Agent is available in this fixture.']);
-  run(root, ['task', 'start', 'TASK-001']);
+  run(root, ['task', 'focus', 'TASK-001']);
   json(root, 'block.json', { reason: 'The upstream API contract is not published yet.', recovery_conditions: ['The contract file exists at contracts/api.md'], evidence: ['contracts/api.md does not exist'] });
   run(root, ['task', 'block', 'TASK-001', '--json-file', 'block.json']);
   const ctx = run(root, ['context']);
@@ -698,10 +704,10 @@ test('decision-affected warnings close after re-completion and done Tasks resist
   run(root, ['task', 'plan', '--json-file', 'tasks.json']);
   run(root, ['project', 'ready']);
   run(root, ['keeper', 'skip', '--reason', 'No second Agent is available in this fixture.']);
-  run(root, ['task', 'start', 'TASK-001']);
+  run(root, ['task', 'focus', 'TASK-001']);
   writeFileSync(join(root, 'out.txt'), 'v1\n', 'utf8');
   json(root, 'done.json', { evidence: ['out.txt verified'], checks: [{ criterion: 'Output verified', evidence: ['out.txt exists with expected content'] }] });
-  run(root, ['task', 'done', 'TASK-001', '--json-file', 'done.json']);
+  run(root, ['task', 'close', 'TASK-001', '--json-file', 'done.json']);
   json(root, 'patch.json', { outcome: 'Silently rewritten outcome that must be rejected' });
   assert(run(root, ['task', 'update', 'TASK-001', '--json-file', 'patch.json'], 1).includes('reopen it first'), 'done Task must not accept silent rewrites');
   json(root, 'decision.json', { summary: 'The output format changed after completion', changes: ['.skeinn/design/evolving.md'], affected_tasks: ['TASK-001'] });
@@ -709,9 +715,9 @@ test('decision-affected warnings close after re-completion and done Tasks resist
   const warned = JSON.parse(run(root, ['check']));
   assert(warned.warnings.join('\n').includes('TASK-001 is done but was marked affected'), 'done-before-decision Task must warn');
   run(root, ['task', 'reopen', 'TASK-001', '--reason', 'Reviewed against the format decision; re-verifying output.']);
-  run(root, ['task', 'start', 'TASK-001']);
+  run(root, ['task', 'focus', 'TASK-001']);
   writeFileSync(join(root, 'out.txt'), 'v2\n', 'utf8');
-  run(root, ['task', 'done', 'TASK-001', '--json-file', 'done.json']);
+  run(root, ['task', 'close', 'TASK-001', '--json-file', 'done.json']);
   const cleared = JSON.parse(run(root, ['check']));
   assert(!cleared.warnings.join('\n').includes('TASK-001 is done but was marked affected'), 're-completion after the decision must close the warning');
 });
@@ -730,13 +736,13 @@ test('task start requires an attested Keeper pass or a recorded skip', () => {
   state.keeper.attempts = [{ run_id: 'legacy-pass-001', verdict: 'passed', summary: 'Recorded before provenance rules.', evidence: ['Legacy pass'], gaps: [], at: new Date().toISOString() }];
   state.project.status = 'build_ready';
   writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
-  assert(run(root, ['task', 'start', 'TASK-001'], 1).includes('independent review provenance'), 'unattested pass must not gate execution');
+  assert(run(root, ['check'], 1).includes('independently attested'), 'unattested pass must fail check');
   const unhealthy = JSON.parse(run(root, ['check'], 1));
   assert(unhealthy.errors.join('\n').includes('independently attested'), 'check must report an unattested pass as an error');
   run(root, ['capability', 'exempt', '--reason', 'Fixture verifies Keeper attestation; no specialist domain applies.']);
   run(root, ['project', 'ready']);
   run(root, ['keeper', 'skip', '--reason', 'Only one Agent exists in this fixture.']);
-  run(root, ['task', 'start', 'TASK-001']);
+  run(root, ['task', 'focus', 'TASK-001']);
   const healthy = JSON.parse(run(root, ['check']));
   assert(healthy.healthy === true, 'a recorded skip is a legitimate build state');
 });
@@ -752,10 +758,10 @@ test('planning new Tasks on a complete project returns it to building', () => {
   run(root, ['task', 'plan', '--json-file', 'tasks.json']);
   run(root, ['project', 'ready']);
   run(root, ['keeper', 'skip', '--reason', 'No second Agent is available in this fixture.']);
-  run(root, ['task', 'start', 'TASK-001']);
+  run(root, ['task', 'focus', 'TASK-001']);
   writeFileSync(join(root, 'out.txt'), 'v1\n', 'utf8');
   json(root, 'done.json', { evidence: ['out.txt exists'], checks: [{ criterion: 'Output exists', evidence: ['out.txt on disk'] }] });
-  run(root, ['task', 'done', 'TASK-001', '--json-file', 'done.json']);
+  run(root, ['task', 'close', 'TASK-001', '--json-file', 'done.json']);
   assert(JSON.parse(readFileSync(join(root, '.skeinn', 'state.json'), 'utf8')).project.status === 'complete', 'project should be complete after the last Task');
   run(root, ['capability', 'add', 'new-domain', '--title', 'New professional domain']);
   json(root, 'tasks2.json', { tasks: [{ title: 'Second unit', outcome: 'A second verified output file exists on disk', done_when: ['Second output exists'], boundaries: ['Test only'], reads: ['.skeinn/PROJECT.md'], touches: ['out2.txt'], implements: '.skeinn/design/extend.md#Responsibility', capability_exemption: 'New dossier is still researching; this Task does not consume its nodes yet.' }] });
@@ -764,7 +770,7 @@ test('planning new Tasks on a complete project returns it to building', () => {
   const ctx = run(root, ['context']);
   assert(ctx.includes('new-domain (external_researched'), 'context must surface the new capability mode');
   assert(!ctx.includes('All Tasks are done'), 'context must not claim completion while new Tasks are open');
-  run(root, ['task', 'start', 'TASK-002']);
+  run(root, ['task', 'focus', 'TASK-002']);
 });
 
 test('a Keeper pass must close findings still open across all earlier attempts', () => {
@@ -827,10 +833,10 @@ test('deliverable coverage separates planned from delivered', () => {
   run(root, ['capability', 'exempt', '--reason', 'Fixture verifies deliverable coverage; no specialist domain applies.']);
   run(root, ['project', 'ready']);
   run(root, ['keeper', 'skip', '--reason', 'No second Agent is available in this fixture.']);
-  run(root, ['task', 'start', 'TASK-001']);
+  run(root, ['task', 'focus', 'TASK-001']);
   writeFileSync(join(root, 'out.txt'), 'done\n', 'utf8');
   json(root, 'done.json', { evidence: ['out.txt exists'], checks: [{ criterion: 'File exists', evidence: ['out.txt on disk'] }] });
-  run(root, ['task', 'done', 'TASK-001', '--json-file', 'done.json']);
+  run(root, ['task', 'close', 'TASK-001', '--json-file', 'done.json']);
   const delivered = JSON.parse(run(root, ['check']));
   assert(delivered.deliverable_coverage.delivered === 1, 'completed covering Task must count as delivered');
   assert(!delivered.warnings.join('\n').includes('covered only by Tasks not yet done'), 'delivered coverage must clear the warning');
@@ -839,8 +845,8 @@ test('deliverable coverage separates planned from delivered', () => {
 test('shaping guidance chains purpose, next steps, and the live frontier', () => {
   const root = workspace();
   const help = run(root, ['--help']);
-  assert(help.includes('unresumable monolith'), 'help must say what skipping design costs');
-  assert(help.includes('generic output'), 'help must say what skipping capabilities costs');
+  assert(help.includes('skeinn design add'), 'help must include design add');
+  assert(help.includes('skeinn capability add'), 'help must include capability add');
   for (const topic of ['shaping', 'design', 'capability', 'task', 'deliverable']) {
     assert(help.includes(topic), `help must name the ${topic} concept topic`);
   }
@@ -875,7 +881,7 @@ test('shaping guidance chains purpose, next steps, and the live frontier', () =>
   assert(confirmResult.next && confirmResult.next.includes('guardrails'), 'confirm must chain to guardrails');
   const planResult = JSON.parse(run(root, ['task', 'plan', '--json-file', json(root, 'tasks.json', { tasks: [{ title: 'Guided work', outcome: 'A guided Task exists with executable status', done_when: ['Output exists'], boundaries: ['Test only'], guardrails: ['Never add ceremonial extra CLI steps'], reads: ['.skeinn/PROJECT.md'], touches: ['out.txt'], implements: '.skeinn/design/guidance.md#Responsibility' }] })]));
   assert(planResult.next && planResult.next.includes('skeinn project ready'), 'task plan must chain to project ready');
-  const startResult = JSON.parse((() => { run(root, ['project', 'ready']); run(root, ['keeper', 'skip', '--reason', 'No second Agent is available in this fixture.']); return run(root, ['task', 'start', 'TASK-001']); })());
+  const startResult = JSON.parse((() => { run(root, ['project', 'ready']); run(root, ['keeper', 'skip', '--reason', 'No second Agent is available in this fixture.']); return run(root, ['task', 'focus', 'TASK-001']); })());
   assert(startResult.next && startResult.next.includes('skeinn context'), 'task start must chain to context');
 });
 
@@ -935,12 +941,12 @@ test('reopening an upstream Task flags done downstream dependents as needs_reche
   run(root, ['task', 'plan', '--json-file', 'tasks.json']);
   run(root, ['project', 'ready']);
   run(root, ['keeper', 'skip', '--reason', 'No second Agent is available in this fixture.']);
-  run(root, ['task', 'start', 'TASK-001']);
+  run(root, ['task', 'focus', 'TASK-001']);
   writeFileSync(join(root, 's1.txt'), 'v1\n', 'utf8');
-  run(root, ['task', 'done', 'TASK-001', '--json-file', json(root, 'd1.json', { evidence: ['s1 ok'], checks: [{ criterion: 'Stage one file exists', evidence: ['s1.txt on disk'] }] })]);
-  run(root, ['task', 'start', 'TASK-002']);
+  run(root, ['task', 'close', 'TASK-001', '--json-file', json(root, 'd1.json', { evidence: ['s1 ok'], checks: [{ criterion: 'Stage one file exists', evidence: ['s1.txt on disk'] }] })]);
+  run(root, ['task', 'focus', 'TASK-002']);
   writeFileSync(join(root, 's2.txt'), 'v1\n', 'utf8');
-  run(root, ['task', 'done', 'TASK-002', '--json-file', json(root, 'd2.json', { evidence: ['s2 ok'], checks: [{ criterion: 'Stage two file exists', evidence: ['s2.txt on disk'] }] })]);
+  run(root, ['task', 'close', 'TASK-002', '--json-file', json(root, 'd2.json', { evidence: ['s2 ok'], checks: [{ criterion: 'Stage two file exists', evidence: ['s2.txt on disk'] }] })]);
   run(root, ['task', 'reopen', 'TASK-001', '--reason', 'Stage one contract changed and invalidated prior output.']);
   const checkAfterReopen = JSON.parse(run(root, ['check']));
   assert(checkAfterReopen.warnings.join('\n').includes('TASK-002 is done but upstream dependency (TASK-001) is no longer done — needs_recheck'), 'check must warn about stale done downstream Tasks');
@@ -1042,7 +1048,7 @@ test('passed_with_advisories pins Task & Doc findings, surfaces them on task sta
   assert(keeperState.launch_completed === true && keeperState.findings.length === 2, 'advisories should deduplicate and mark launch_completed');
 
   // Starting TASK-001 automatically surfaces BOTH the Task-pinned AND the Doc-pinned advisory
-  const started = JSON.parse(run(root, ['task', 'start', 'TASK-001']));
+  const started = JSON.parse(run(root, ['task', 'focus', 'TASK-001']));
   assert(started.pinned_advisories.length === 2, 'task start must surface both Task-pinned and Doc-pinned advisories');
   const ctx = run(root, ['context']);
   assert(ctx.includes('Pinned Keeper findings for TASK-001') && ctx.includes('Clarify token expiry wording'), 'active context must surface pinned advisories');
@@ -1111,21 +1117,21 @@ test('late-entering horizon docs and in-flight checkpoints work via reviewed_dig
   run(root, ['keeper', 'record', '--json-file', 'kpass.json']);
 
   // Complete TASK-001 -> TASK-004 (and m4-billing.md) now enters depth=2 horizon!
-  run(root, ['task', 'start', 'TASK-001']);
+  run(root, ['task', 'focus', 'TASK-001']);
   writeFileSync(join(root, 's1.txt'), 'done', 'utf8');
-  run(root, ['task', 'done', 'TASK-001', '--json-file', json(root, 'd1.json', { evidence: ['s1 ok'], checks: [{ criterion: 's1 ok', evidence: ['s1.txt exists'] }] })]);
+  run(root, ['task', 'close', 'TASK-001', '--json-file', json(root, 'd1.json', { evidence: ['s1 ok'], checks: [{ criterion: 's1 ok', evidence: ['s1.txt exists'] }] })]);
 
   // check & checkpoint context automatically surface m4-billing.md as dirty (never reviewed!) without reopening Launch
   const chkWarn = JSON.parse(run(root, ['check'])).warnings.join('\n');
   assert(chkWarn.includes('.skeinn/design/m4-billing.md'), 'check must detect newly-entering unreviewed horizon doc');
   const chkCtx = run(root, ['context', '--checkpoint']);
   assert(chkCtx.includes('## Design document (dirty): m4-billing.md'), 'checkpoint context must inject newly-entering horizon doc');
-  const chkPrompt = run(root, ['keeper', 'checkpoint', 'prompt', '--milestone', 'pre-billing']);
+  const chkPrompt = run(root, ['keeper', 'prompt', '--checkpoint', '--milestone', 'pre-billing']);
   assert(chkPrompt.includes('m4-billing.md'), 'checkpoint prompt must list dirty horizon artifacts');
 
   // Record clean checkpoint -> commits m4-billing.md into reviewed_digests and clears warning
   json(root, 'chk.json', { run_id: 'chk-run-001', milestone: 'pre-billing', verdict: 'clean', summary: 'Billing design verified.', evidence: ['Inspected m4-billing.md'], review: independentReview('fresh-chk-agent') });
-  run(root, ['keeper', 'checkpoint', 'record', '--json-file', 'chk.json']);
+  run(root, ['keeper', 'record', '--checkpoint', '--json-file', 'chk.json']);
   const afterChk = JSON.parse(run(root, ['check'])).warnings.join('\n');
   assert(!afterChk.includes('m4-billing.md'), 'clean checkpoint must commit horizon digests and clear dirty warning');
 });
@@ -1136,9 +1142,9 @@ test('spike tasks run in shaping before Keeper and keeper reset cleanly reopens 
   writeFileSync(join(root, '.skeinn', 'PROJECT.md'), PROJ('A spike and reset fixture proving empirical prototypes can run before Launch and major pivots can reset reviewed digests.'), 'utf8');
   json(root, 'spike.json', { tasks: [{ title: 'Benchmark local storage quota', kind: 'spike', outcome: 'Measured actual browser storage limit for offline drafts', acceptance: [{ criterion: 'Empirical quota recorded in spike-result.txt', verify_by: 'Check spike-result.txt exists', evidence: '' }], boundaries: ['No production UI code'], reads: ['.skeinn/PROJECT.md'], touches: ['spike-result.txt'] }] });
   run(root, ['task', 'plan', '--json-file', 'spike.json']);
-  run(root, ['task', 'start', 'TASK-001']);
+  run(root, ['task', 'focus', 'TASK-001']);
   writeFileSync(join(root, 'spike-result.txt'), '5MB localStorage limit confirmed\n', 'utf8');
-  const doneSpike = JSON.parse(run(root, ['task', 'done', 'TASK-001', '--json-file', json(root, 'sdone.json', { evidence: ['Measured 5MB'], acceptance_results: [{ criterion: 'Empirical quota recorded in spike-result.txt', evidence: 'spike-result.txt contains measured limit' }] })]));
+  const doneSpike = JSON.parse(run(root, ['task', 'close', 'TASK-001', '--json-file', json(root, 'sdone.json', { evidence: ['Measured 5MB'], acceptance_results: [{ criterion: 'Empirical quota recorded in spike-result.txt', evidence: 'spike-result.txt contains measured limit' }] })]));
   assert(doneSpike.status === 'done' && doneSpike.kind === 'spike', 'spike should complete in shaping before Keeper');
 
   // Test keeper reset escape hatch
@@ -1149,65 +1155,294 @@ test('spike tasks run in shaping before Keeper and keeper reset cleanly reopens 
   assert(readFileSync(join(root, '.skeinn', 'DECISIONS.md'), 'utf8').includes('Keeper relaunch reset'), 'keeper reset must log a decision');
 });
 
-test('silent-drift watch: 5 delivery Tasks ring the checkpoint bell, context injects their touches, and only a clean review clears it', () => {
+
+function gitExec(cwd, args) {
+  const res = spawnSync('git', args, { cwd, encoding: 'utf8' });
+  if (res.status !== 0) throw new Error(`git ${args.join(' ')} failed: ${res.stderr}`);
+  return res.stdout.trim();
+}
+
+function initGitFixture() {
   const root = workspace();
+  gitExec(root, ['init']);
+  gitExec(root, ['config', 'user.email', 'test@skeinn.dev']);
+  gitExec(root, ['config', 'user.name', 'Skeinn Test']);
+  writeFileSync(join(root, '.gitignore'), '.skeinn/\n', 'utf8');
+  mkdirSync(join(root, 'src'), { recursive: true });
+  writeFileSync(join(root, 'src', 'app.js'), 'export const v = 1;\n', 'utf8');
+  gitExec(root, ['add', '.']);
+  gitExec(root, ['commit', '-m', 'initial commit']);
   run(root, ['init']);
-  writeFileSync(join(root, '.skeinn', 'PROJECT.md'), PROJ('A silent-drift fixture proving five delivery Tasks with unchanged declarations ring the checkpoint watchdog and only a clean review resets it.'), 'utf8');
-  run(root, ['design', 'add', 'core-sys', '--title', 'Core system', '--kind', 'system']);
-  writeFileSync(join(root, '.skeinn', 'design', 'core-sys.md'), '# Core system\n\n- Kind: system\n- Status: ready\n\n## Responsibility\nEverything.\n\n## Alternatives considered\nA vs B.\n', 'utf8');
-  run(root, ['capability', 'exempt', '--reason', 'Fixture verifies silent-drift watchdog; no specialist domain applies.']);
-  json(root, 'tasks.json', { tasks: [1, 2, 3, 4, 5].map((n) => ({
-    title: `Slice ${n}`, outcome: `Slice ${n} output exists on disk`, done_when: [`s${n} ok`], boundaries: [`s${n} only`],
-    ...(n > 1 ? { depends_on: [`TASK-00${n - 1}`] } : {}),
-    reads: ['.skeinn/PROJECT.md', '.skeinn/design/core-sys.md'], touches: [`s${n}.txt`], implements: '.skeinn/design/core-sys.md#Responsibility',
-  })) });
-  run(root, ['task', 'plan', '--json-file', 'tasks.json']);
-  const ready = JSON.parse(run(root, ['project', 'ready']));
-  json(root, 'kpass.json', { run_id: 'drift-launch-001', prepared_digest: ready.digest, verdict: 'passed', summary: 'Launch ready.', evidence: ['Horizon ok.'], review: independentReview('fresh-drift-agent') });
-  run(root, ['keeper', 'record', '--json-file', 'kpass.json']);
-  for (let n = 1; n <= 5; n += 1) {
-    run(root, ['task', 'start', `TASK-00${n}`]);
-    writeFileSync(join(root, `s${n}.txt`), 'done', 'utf8');
-    run(root, ['task', 'done', `TASK-00${n}`, '--json-file', json(root, `d${n}.json`, { evidence: [`s${n} ok`], checks: [{ criterion: `s${n} ok`, evidence: [`s${n}.txt exists`] }] })]);
+  gitExec(root, ['add', 'AGENTS.md']);
+  gitExec(root, ['commit', '-m', 'add AGENTS.md']);
+  writeFileSync(join(root, '.skeinn', 'PROJECT.md'), PROJ('A real Git-backed v3.0 fixture testing dual windows, shared surface, worktrees, and signposts.'), 'utf8');
+  run(root, ['design', 'add', 'core', '--title', 'Core System', '--kind', 'system']);
+  writeFileSync(join(root, '.skeinn', 'design', 'core.md'), '# Core System\n- Kind: system\n\n## Responsibility\nManage state cleanly.\n\n## Alternatives considered\nOption A: single file vs Option B: SQLite. Chose Option A for portability.\n\n## Applied capabilities\nNone (exempted).\n\n## How this could look done yet fail\nSilent drift between code and design.\n', 'utf8');
+  run(root, ['capability', 'exempt', '--reason', 'Minimal test fixture with standard engineering only']);
+  return root;
+}
+
+test('v3.0 removed legacy commands exit 1 with exact migration signposts', () => {
+  const root = workspace();
+  const cases = [
+    [['task', 'start', 'TASK-001'], 'skeinn task focus'],
+    [['task', 'done', 'TASK-001'], 'skeinn task close'],
+    [['capability', 'research', 'ux'], 'skeinn capability add'],
+    [['capability', 'synthesize', 'ux'], 'skeinn capability add'],
+    [['keeper', 'checkpoint', 'prompt'], 'skeinn keeper prompt --checkpoint'],
+    [['review'], 'skeinn keeper --help'],
+    [['resume'], 'skeinn context'],
+    [['prompts'], 'skeinn help prompts'],
+  ];
+  for (const [args, expected] of cases) {
+    const err = run(root, args, 1);
+    assert(err.includes('removed in Skeinn v3.0') && err.includes(expected), `${args.join(' ')} signpost missing ${expected}: ${err}`);
   }
-  const warnings = JSON.parse(run(root, ['check'])).warnings.join('\n');
-  assert(warnings.includes('silent spec-to-code drift') && warnings.includes('TASK-005'), 'check must warn about silent drift after 5 delivery tasks');
-  const normalCtx = run(root, ['context']);
-  assert(normalCtx.includes('Silent-drift watch'), 'normal context must surface the silent-drift watch line');
-  const cpCtx = run(root, ['context', '--checkpoint']);
-  assert(cpCtx.includes('TASK-005') && cpCtx.includes('s5.txt'), 'checkpoint context must list recent delivery Tasks even when dirty is empty');
-  const cpPrompt = run(root, ['keeper', 'checkpoint', 'prompt']);
-  assert(cpPrompt.includes('TASK-005') && cpPrompt.includes('s5.txt'), 'checkpoint prompt must list recent delivery tasks with their touches');
-  json(root, 'chkdrift.json', { run_id: 'chk-drift-001', verdict: 'drift_detected', summary: 'Found drift in slice 4.', evidence: ['Diffed s4.'], review: independentReview('fresh-chk-drift') });
-  run(root, ['keeper', 'checkpoint', 'record', '--json-file', 'chkdrift.json']);
-  const still = JSON.parse(run(root, ['check'])).warnings.join('\n');
-  assert(still.includes('silent spec-to-code drift'), 'drift_detected checkpoint must NOT clear the watchdog');
-  json(root, 'chkclean.json', { run_id: 'chk-clean-001', verdict: 'clean', summary: 'Re-verified recent work.', evidence: ['Re-ran checks.'], review: independentReview('fresh-chk-clean') });
-  run(root, ['keeper', 'checkpoint', 'record', '--json-file', 'chkclean.json']);
-  const cleared = JSON.parse(run(root, ['check'])).warnings.join('\n');
-  assert(!cleared.includes('silent spec-to-code drift'), 'clean checkpoint must reset the silent-drift baseline');
 });
 
-test('delivery Tasks cannot depend_on a spike (rejected at both plan and update)', () => {
+test('v3.0 --stdin, --evidence shortcut, task list, and direct open->close work without temp JSON files', () => {
+  const root = initGitFixture();
+  runWithStdin(root, ['task', 'plan', '--stdin'], JSON.stringify({
+    tasks: [{
+      title: 'Direct close task',
+      outcome: 'Verify stdin planning and single-line evidence close without touches',
+      acceptance: [
+        { criterion: 'File created', verify_by: 'ls src/feat.js', evidence: '' },
+        { criterion: 'Tests pass', verify_by: 'node src/feat.js', evidence: '' },
+      ],
+      boundaries: ['Only adds src/feat.js'],
+      locks: ['src/feat.js'],
+      reads: ['.skeinn/PROJECT.md', '.skeinn/design/core.md'],
+      implements: '.skeinn/design/core.md#Responsibility',
+    }],
+  }));
+  const list = JSON.parse(run(root, ['task', 'list']));
+  assert(list.length === 1 && list[0].id === 'TASK-001' && list[0].status === 'open', 'task list must return open tasks');
+
+  writeFileSync(join(root, 'src', 'feat.js'), 'export const feat = true;\n', 'utf8');
+  const closed = JSON.parse(run(root, ['task', 'close', 'TASK-001', '--evidence', 'Verified src/feat.js exists and executes cleanly']));
+  assert(closed.status === 'done', 'open task must close directly without forced focus');
+  assert(closed.acceptance.every((a) => a.evidence.includes('Verified src/feat.js')), '--evidence must auto-map to all acceptance criteria');
+  assert(closed.actual_touches.includes('src/feat.js'), `actual_touches must auto-derive src/feat.js, got ${JSON.stringify(closed.actual_touches)}`);
+  assert(!closed.lock_violations, 'no lock violation expected');
+});
+
+test('v3.0 dual-window anti-gaming: mid-window commits and task splitting cannot shrink review window', () => {
+  const root = initGitFixture();
+  runWithStdin(root, ['task', 'plan', '--stdin'], JSON.stringify({
+    tasks: [
+      { title: 'Part 1', outcome: 'First small task in a split sequence of commits', acceptance: [{ criterion: 'Done 1', verify_by: 'check', evidence: '' }], boundaries: ['Scope 1'], reads: ['.skeinn/PROJECT.md'], implements: '.skeinn/design/core.md#Responsibility' },
+      { title: 'Part 2', outcome: 'Second small task in a split sequence of commits', acceptance: [{ criterion: 'Done 2', verify_by: 'check', evidence: '' }], boundaries: ['Scope 2'], reads: ['.skeinn/PROJECT.md'], implements: '.skeinn/design/core.md#Responsibility' },
+    ],
+  }));
+  const ready = JSON.parse(run(root, ['project', 'ready']));
+  runWithStdin(root, ['keeper', 'record', '--stdin'], JSON.stringify({
+    run_id: 'launch-anti-game-001',
+    prepared_digest: ready.digest,
+    verdict: 'passed',
+    review: { mode: 'independent', reviewer_id: 'fresh-reviewer-01', evidence: 'Isolated launch review completed cleanly.' },
+    summary: 'Launch passed.',
+    gaps: [],
+    evidence: ['Inspected core.md and tasks'],
+  }));
+
+  run(root, ['task', 'focus', 'TASK-001']);
+  for (let i = 1; i <= 4; i += 1) writeFileSync(join(root, 'src', `f${i}.js`), `export const x${i} = ${i};\n`, 'utf8');
+  gitExec(root, ['add', '.']);
+  gitExec(root, ['commit', '-m', 'part 1 commit']);
+  run(root, ['task', 'close', 'TASK-001', '--evidence', 'Part 1 verified cleanly']);
+
+  run(root, ['task', 'focus', 'TASK-002']);
+  for (let i = 5; i <= 9; i += 1) writeFileSync(join(root, 'src', `f${i}.js`), `export const x${i} = ${i};\n`, 'utf8');
+  gitExec(root, ['add', '.']);
+  gitExec(root, ['commit', '-m', 'part 2 commit']);
+
+  const err = run(root, ['task', 'close', 'TASK-002', '--evidence', 'Part 2 verified cleanly'], 1);
+  assert(err.includes('review window is heavy'), `heavy review window must block close: ${err}`);
+
+  runWithStdin(root, ['keeper', 'record', '--checkpoint', '--stdin'], JSON.stringify({
+    run_id: 'chk-clean-001',
+    verdict: 'clean',
+    review: { mode: 'independent', reviewer_id: 'fresh-chk-01', evidence: 'Audited 9 files against core.md.' },
+    summary: 'All 9 files match core design.',
+    evidence: ['Reviewed git diff'],
+  }));
+  const closed2 = JSON.parse(run(root, ['task', 'close', 'TASK-002', '--evidence', 'Part 2 verified cleanly']));
+  assert(closed2.status === 'done', 'clean checkpoint must unlock heavy close');
+});
+
+test('v3.0 cold-start churn shared surface triggers heavy gate and covering decision unlocks close', () => {
+  const root = initGitFixture();
+  for (let i = 0; i < 5; i += 1) {
+    writeFileSync(join(root, 'src', 'hot.js'), `export const rev = ${i};\n`, 'utf8');
+    gitExec(root, ['add', 'src/hot.js']);
+    gitExec(root, ['commit', '-m', `churn ${i}`]);
+  }
+  runWithStdin(root, ['task', 'plan', '--stdin'], JSON.stringify({
+    tasks: [{ title: 'Touch hot file', outcome: 'Modify shared hot file safely with decision cover', acceptance: [{ criterion: 'Updated', verify_by: 'test', evidence: '' }], boundaries: ['Only hot.js'], reads: ['.skeinn/PROJECT.md'], implements: '.skeinn/design/core.md#Responsibility' }],
+  }));
+  const ready = JSON.parse(run(root, ['project', 'ready']));
+  runWithStdin(root, ['keeper', 'record', '--stdin'], JSON.stringify({
+    run_id: 'launch-hot-001',
+    prepared_digest: ready.digest,
+    verdict: 'passed',
+    review: { mode: 'independent', reviewer_id: 'fresh-reviewer-02', evidence: 'Isolated launch review.' },
+    summary: 'Passed.',
+    gaps: [],
+    evidence: ['OK'],
+  }));
+
+  writeFileSync(join(root, 'src', 'hot.js'), 'export const rev = 99;\n', 'utf8');
+  const err = run(root, ['task', 'close', 'TASK-001', '--evidence', 'Updated hot file'], 1);
+  assert(err.includes('shared surface touched: src/hot.js'), `cold-start churn must trigger heavy shared surface: ${err}`);
+
+  runWithStdin(root, ['decision', '--stdin'], JSON.stringify({
+    summary: 'Approved targeted update to shared src/hot.js for TASK-001',
+    changes: ['src/hot.js'],
+    affected_tasks: ['TASK-001'],
+  }));
+  const closed = JSON.parse(run(root, ['task', 'close', 'TASK-001', '--evidence', 'Updated hot file with decision']));
+  assert(closed.status === 'done', 'covering decision must unlock heavy close');
+});
+
+test('v3.0 horizon-scoped prepared_scope ignores out-of-horizon edits between ready and record', () => {
+  const root = initGitFixture();
+  run(root, ['design', 'add', 'future', '--title', 'Future Subsystem', '--kind', 'verification']);
+  writeFileSync(join(root, '.skeinn', 'design', 'future.md'), '# Future Subsystem\n- Kind: verification\n\n## Responsibility\nDistant phase 3 work.\n', 'utf8');
+  runWithStdin(root, ['task', 'plan', '--stdin'], JSON.stringify({
+    tasks: [
+      { id: 'TASK-001', title: 'Hop 0', outcome: 'First hop task in horizon', acceptance: [{ criterion: 'ok', verify_by: 'test', evidence: '' }], boundaries: ['hop0'], reads: ['.skeinn/PROJECT.md'], implements: '.skeinn/design/core.md#Responsibility' },
+      { id: 'TASK-002', title: 'Hop 1', outcome: 'Second hop task in horizon', depends_on: ['TASK-001'], acceptance: [{ criterion: 'ok', verify_by: 'test', evidence: '' }], boundaries: ['hop1'], reads: ['.skeinn/PROJECT.md'], implements: '.skeinn/design/core.md#Responsibility' },
+      { id: 'TASK-003', title: 'Hop 2', outcome: 'Third hop task in horizon', depends_on: ['TASK-002'], acceptance: [{ criterion: 'ok', verify_by: 'test', evidence: '' }], boundaries: ['hop2'], reads: ['.skeinn/PROJECT.md'], implements: '.skeinn/design/core.md#Responsibility' },
+      { id: 'TASK-004', title: 'Hop 3 distant', outcome: 'Out of horizon distant task', depends_on: ['TASK-003'], acceptance: [{ criterion: 'ok', verify_by: 'test', evidence: '' }], boundaries: ['hop3'], reads: ['.skeinn/PROJECT.md', '.skeinn/design/future.md'], implements: '.skeinn/design/future.md#Responsibility' },
+    ],
+  }));
+  const ready = JSON.parse(run(root, ['project', 'ready']));
+  writeFileSync(join(root, '.skeinn', 'design', 'future.md'), '# Future Subsystem\n- Kind: verification\n\n## Responsibility\nEdited on another lane mid-flight!\n', 'utf8');
+  const keeper = JSON.parse(runWithStdin(root, ['keeper', 'record', '--stdin'], JSON.stringify({
+    run_id: 'horizon-scope-001',
+    prepared_digest: ready.digest,
+    verdict: 'passed',
+    review: { mode: 'independent', reviewer_id: 'fresh-horizon-01', evidence: 'Isolated horizon review.' },
+    summary: 'Horizon passed despite out-of-horizon edit.',
+    gaps: [],
+    evidence: ['Checked active horizon'],
+  })));
+  assert(keeper.status === 'passed', 'out-of-horizon edits must NOT invalidate prepared_scope');
+});
+
+test('v3.0 lost review anchor triggers loud heavy fallback', () => {
+  const root = initGitFixture();
+  runWithStdin(root, ['task', 'plan', '--stdin'], JSON.stringify({
+    tasks: [{ title: 'Anchor test', outcome: 'Verify lost anchor is detected loudly after history rewrite', acceptance: [{ criterion: 'ok', verify_by: 'test', evidence: '' }], boundaries: ['test'], reads: ['.skeinn/PROJECT.md'], implements: '.skeinn/design/core.md#Responsibility' }],
+  }));
+  const ready = JSON.parse(run(root, ['project', 'ready']));
+  runWithStdin(root, ['keeper', 'record', '--stdin'], JSON.stringify({
+    run_id: 'launch-anchor-001',
+    prepared_digest: ready.digest,
+    verdict: 'passed',
+    review: { mode: 'independent', reviewer_id: 'fresh-anchor-01', evidence: 'Isolated review.' },
+    summary: 'Passed.',
+    gaps: [],
+    evidence: ['OK'],
+  }));
+
+  const statePath = join(root, '.skeinn', 'state.json');
+  const st = JSON.parse(readFileSync(statePath, 'utf8'));
+  st.keeper.last_reviewed_commit = 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
+  writeFileSync(statePath, JSON.stringify(st, null, 2));
+
+  const checkOut = JSON.parse(run(root, ['check']));
+  assert(checkOut.review_window.anchor_status === 'lost', 'anchor_status must be lost');
+  assert(checkOut.review_window.level === 'heavy', 'lost anchor must force heavy level');
+  assert(checkOut.warnings.some((w) => w.includes('Review anchor lost')), 'check must warn loudly on lost anchor');
+});
+
+test('v3.0 parallel git worktrees share main .skeinn/ automatically and support per-lane active tasks', () => {
+  const root = initGitFixture();
+  runWithStdin(root, ['task', 'plan', '--stdin'], JSON.stringify({
+    tasks: [
+      { id: 'TASK-001', title: 'Lane A task', outcome: 'First parallel lane work item', acceptance: [{ criterion: 'ok', verify_by: 'test', evidence: '' }], boundaries: ['lane A'], reads: ['.skeinn/PROJECT.md'], implements: '.skeinn/design/core.md#Responsibility' },
+      { id: 'TASK-002', title: 'Lane B task', outcome: 'Second parallel lane work item', acceptance: [{ criterion: 'ok', verify_by: 'test', evidence: '' }], boundaries: ['lane B'], reads: ['.skeinn/PROJECT.md'], implements: '.skeinn/design/core.md#Responsibility' },
+    ],
+  }));
+
+  const wtParent = mkdtempSync(join(tmpdir(), 'skeinn-wt-'));
+  roots.push(wtParent);
+  const wtDir = join(wtParent, 'lane-b');
+  gitExec(root, ['worktree', 'add', '-b', 'lane-b', wtDir]);
+
+  const focusA = JSON.parse(run(root, ['task', 'focus', 'TASK-001']));
+  const focusB = JSON.parse(run(wtDir, ['task', 'focus', 'TASK-002']));
+  assert(focusA.lane !== focusB.lane, `lanes should differ: ${focusA.lane} vs ${focusB.lane}`);
+
+  const ctxB = run(wtDir, ['context']);
+  assert(ctxB.includes('(shared_worktree)'), 'linked worktree must auto-detect shared_worktree state mode');
+  assert(ctxB.includes('TASK-002'), 'linked worktree context must show its lane active task');
+
+  run(wtDir, ['task', 'focus', 'TASK-001'], 1);
+  gitExec(root, ['worktree', 'remove', '--force', wtDir]);
+});
+
+test('v3.0 forbids delivery->spike dependency, flags locks violations, and refreshes v2 AGENTS.md', () => {
+  const root = initGitFixture();
+  const badPlanErr = runWithStdin(root, ['task', 'plan', '--stdin'], JSON.stringify({
+    tasks: [
+      { id: 'TASK-001', kind: 'spike', title: 'Spike test', outcome: 'Explore caching options quickly', acceptance: [{ criterion: 'notes', verify_by: 'read', evidence: '' }], boundaries: ['spike only'], reads: ['.skeinn/PROJECT.md'], design_exemption: 'Exploratory spike before design lock' },
+      { id: 'TASK-002', kind: 'delivery', title: 'Build cache', outcome: 'Deliver production cache layer', depends_on: ['TASK-001'], acceptance: [{ criterion: 'tests', verify_by: 'npm test', evidence: '' }], boundaries: ['cache'], reads: ['.skeinn/PROJECT.md'], implements: '.skeinn/design/core.md#Responsibility' },
+    ],
+  }), 1);
+  assert(badPlanErr.includes('cannot depend on exploratory spike'), `delivery->spike must fail: ${badPlanErr}`);
+
+  runWithStdin(root, ['task', 'plan', '--stdin'], JSON.stringify({
+    tasks: [{ title: 'Locked task', outcome: 'Stay inside src/only/ directory', acceptance: [{ criterion: 'ok', verify_by: 'test', evidence: '' }], boundaries: ['only src/only/'], locks: ['src/only/'], reads: ['.skeinn/PROJECT.md'], implements: '.skeinn/design/core.md#Responsibility' }],
+  }));
+  writeFileSync(join(root, 'src', 'outside.js'), 'export const oops = 1;\n', 'utf8');
+  const closed = JSON.parse(run(root, ['task', 'close', 'TASK-001', '--evidence', 'Modified file outside locks']));
+  assert(closed.lock_violations?.includes('src/outside.js'), 'lock violation must be recorded on close');
+
+  writeFileSync(join(root, 'AGENTS.md'), '# Project\n\n<!-- skeinn:v2 -->\nOld v2 instructions\n', 'utf8');
+  const checkV2 = JSON.parse(run(root, ['check']));
+  assert(checkV2.warnings.some((w) => w.includes('AGENTS.md anchor is v2')), 'check must warn on v2 AGENTS.md');
+  const refreshed = JSON.parse(run(root, ['init', '--refresh-agents']));
+  assert(refreshed.refreshed_agents === true, 'init --refresh-agents must refresh AGENTS.md');
+  assert(readFileSync(join(root, 'AGENTS.md'), 'utf8').includes('<!-- skeinn:v3 -->'), 'AGENTS.md must now contain v3 marker');
+});
+
+test('v3.0 freeform finding scopes (task: prefix, compound) gate focus and surface as advisories', () => {
   const root = workspace();
   run(root, ['init']);
-  writeFileSync(join(root, '.skeinn', 'PROJECT.md'), PROJ('A spike-DAG fixture proving delivery Tasks cannot wire a spike into the dependency graph.'), 'utf8');
-  // plan: delivery depends_on spike -> reject
-  json(root, 'bad-plan.json', { tasks: [
-    { title: 'Probe quota', kind: 'spike', outcome: 'Measured actual storage quota on device', acceptance: [{ criterion: 'spike.txt exists', verify_by: 'file exists', evidence: '' }], boundaries: ['probe only'], reads: ['.skeinn/PROJECT.md'], touches: ['spike.txt'] },
-    { title: 'Build feature', outcome: 'Feature built and verified on disk', acceptance: [{ criterion: 'feat.js exists', verify_by: 'file exists', evidence: '' }], boundaries: ['feature only'], depends_on: ['TASK-001'], reads: ['.skeinn/PROJECT.md'], touches: ['feat.js'] },
-  ] });
-  assert(run(root, ['task', 'plan', '--json-file', 'bad-plan.json'], 1).includes('cannot depend on spike'), 'delivery depending on spike must be rejected at plan');
-  // spike depends_on spike is allowed, plus a standalone delivery Task
-  json(root, 'ok-plan.json', { tasks: [
-    { title: 'Probe quota', kind: 'spike', outcome: 'Measured actual storage quota on device', acceptance: [{ criterion: 'spike.txt exists', verify_by: 'file exists', evidence: '' }], boundaries: ['probe only'], reads: ['.skeinn/PROJECT.md'], touches: ['spike.txt'] },
-    { title: 'Probe latency', kind: 'spike', outcome: 'Measured actual API latency on device', acceptance: [{ criterion: 'lat.txt exists', verify_by: 'file exists', evidence: '' }], boundaries: ['probe only'], depends_on: ['TASK-001'], reads: ['.skeinn/PROJECT.md'], touches: ['lat.txt'] },
-    { title: 'Build feature', outcome: 'Feature built and verified on disk', acceptance: [{ criterion: 'feat.js exists', verify_by: 'file exists', evidence: '' }], boundaries: ['feature only'], reads: ['.skeinn/PROJECT.md'], touches: ['feat.js'] },
-  ] });
-  run(root, ['task', 'plan', '--json-file', 'ok-plan.json']);
-  // update: retro-fit the delivery Task's depends_on onto a spike -> rejected at update as well
-  json(root, 'upd.json', { depends_on: ['TASK-001'] });
-  assert(run(root, ['task', 'update', 'TASK-003', '--json-file', 'upd.json'], 1).includes('cannot depend on spike'), 'task update must reject wiring a delivery Task onto a spike');
+  writeFileSync(join(root, '.skeinn', 'PROJECT.md'), PROJ('A fixture proving freeform finding scopes (task: prefixes and compound " / " scopes) still gate focus and surface.'), 'utf8');
+  run(root, ['design', 'add', 'core', '--title', 'Core', '--kind', 'system']);
+  writeFileSync(join(root, '.skeinn', 'design', 'core.md'), '# Core\n- Kind: system\n\n## Responsibility\nx.\n\n## Alternatives considered\nA vs B.\n', 'utf8');
+  run(root, ['capability', 'exempt', '--reason', 'Scope-matching fixture; standard engineering only.']);
+  runWithStdin(root, ['task', 'plan', '--stdin'], JSON.stringify({
+    tasks: [
+      { title: 'Blocked one', outcome: 'First task output exists on disk', acceptance: [{ criterion: 'ok', verify_by: 'test', evidence: '' }], boundaries: ['x'], reads: ['.skeinn/PROJECT.md'], implements: '.skeinn/design/core.md' },
+      { title: 'Advised one', outcome: 'Second task output exists on disk', acceptance: [{ criterion: 'ok', verify_by: 'test', evidence: '' }], boundaries: ['x'], depends_on: ['TASK-001'], reads: ['.skeinn/PROJECT.md', '.skeinn/design/core.md'], implements: '.skeinn/design/core.md' },
+    ],
+  }));
+  const ready = JSON.parse(run(root, ['project', 'ready']));
+  // Reviewer writes freeform scopes: "task:" digest-key prefix and compound "task:X / doc" — both must resolve.
+  json(root, 'nr.json', {
+    run_id: 'scope-test-r1', prepared_digest: ready.digest, verdict: 'needs_revision',
+    summary: 'Blocking gap on TASK-001; minor pinned to TASK-002 + doc.',
+    evidence: ['Inspected tasks and design doc.'],
+    gaps: [
+      { id: 'S-1', severity: 'blocking', scope: 'task:TASK-001', gap: 'TASK-001 has a blocking defect found by freeform scope' },
+      { id: 'S-2', severity: 'minor', scope: 'task:TASK-002 / .skeinn/design/core.md', gap: 'compound-scope advisory pinned to TASK-002 and core.md' },
+    ],
+    review: independentReview('fresh-scope-agent'),
+  });
+  run(root, ['keeper', 'record', '--json-file', 'nr.json']);
+  const focusErr = run(root, ['task', 'focus', 'TASK-001'], 1);
+  assert(focusErr.includes('blocking findings'), `task:-prefixed blocking scope must gate focus: ${focusErr}`);
+  run(root, ['keeper', 'resolve', 'FND-001', '--evidence', 'Defect repaired in task definition; verified by re-read.']);
+  run(root, ['task', 'focus', 'TASK-001']);
+  writeFileSync(join(root, 'a.txt'), 'done', 'utf8');
+  run(root, ['task', 'close', 'TASK-001', '--evidence', 'a.txt written and verified on disk']);
+  const focused2 = JSON.parse(run(root, ['task', 'focus', 'TASK-002']));
+  assert((focused2.pinned_advisories || []).some((a) => a.includes('FND-002')), `compound scope must surface advisory at focus, got ${JSON.stringify(focused2.pinned_advisories)}`);
 });
 
 for (const root of roots) rmSync(root, { recursive: true, force: true });
@@ -1215,5 +1450,6 @@ for (const root of roots) rmSync(root, { recursive: true, force: true });
 if (process.exitCode) {
   console.error(`\nResult: ${passed} passed, failures above`);
 } else {
-  console.log(`\nResult: ${passed} passed, 0 failed`);
+  
+console.log(`\nResult: ${passed} passed, 0 failed`);
 }

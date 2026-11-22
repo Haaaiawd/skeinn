@@ -1,5 +1,25 @@
 # Changelog
 
+## 3.0.0 — Intent-Only, Reality-Derived Continuity
+
+### Structural Architecture Upgrades
+- **Read-Only Git Sensing Gateway (`cli/src/git.js`)**: All VCS queries flow through a single whitelisted read-only `gitIn(repoRoot, args)` helper. Skeinn never mutates Git or auto-commits.
+- **Worktree & State Decoupling**: Linked `git worktree`s automatically detect and share the main worktree's `.skeinn/` via `--git-common-dir` while computing Git diffs in their own worktree. Explicit override via `--state <path>` or `SKEINN_STATE`.
+- **Dual-Window Separation (Anti-Gaming)**:
+  - **Review Window** is permanently anchored at `last_reviewed_commit` + `last_reviewed_worktree` SHA-256 digest map (seeded only on Launch pass/skip and `clean` Checkpoints). Task splitting, `focus`, and `close` never reset it.
+  - **Attribution Window** is anchored at `task.focused_at_commit` solely to derive per-task `actual_touches`.
+- **Per-Lane Active Invariant**: Tasks carry a `lane` field (derived from worktree branch/directory or `--lane`), allowing parallel worktrees to each focus one active Task simultaneously without colliding.
+- **Exact Heavy Gate Predicate**: `skeinn task close` refuses iff `windowHeavy && !cleanCheckpointSinceAnchor && !coveringDecisionSinceAnchor`, where heavy is triggered by >= 8 files, >= 400 lines, >= 3 top-level directories, shared-surface hit (seeded from task history + 100-commit git churn), modified horizon design doc, or lost review anchor (`anchor_status: "lost"`).
+- **Horizon-Scoped `prepared_scope` Map**: `skeinn project ready` freezes a per-artifact digest map scoped strictly to `activeHorizon`; out-of-horizon edits on parallel lanes never invalidate an in-flight Keeper run.
+- **Orthogonal 3-Sentinel `skeinn check`**: Detects silent drift (>= 5 closed delivery tasks since last clean review), heavy/lost-anchor physical windows, stale active tasks with worktree drift, `locks` violations, and outdated `AGENTS.md` v2 anchors.
+- **Structural Guardrail**: Delivery tasks cannot `depends_on` exploratory `spike` tasks.
+- **Freeform finding scopes**: Finding `scope` fields tolerate real reviewer output — `task:` digest-key prefixes, bare Task ids, and compound `" / "` / comma-joined scopes are canonicalized at write and matched per-part at `task focus`/`close` gating and horizon checks.
+
+### Clean v3.0 CLI & Context Injection
+- **Zero-Ceremony Input**: All JSON commands accept `--stdin`, `--json '<json>'`, or `--json-file <path>`; `skeinn task close <id> --evidence "<proof>"` maps single-line proof across all acceptance criteria.
+- **Clean Vocabulary + Signposts**: Replaced `task start/done` -> `task focus/close`, added `task list`, unified `keeper prompt/record [--checkpoint]`, added `init --refresh-agents` (`<!-- skeinn:v3 -->`). Removed legacy aliases (`task start`, `task done`, `capability research/synthesize`, `keeper checkpoint`, `review`, `resume`, `prompts`) now exit 1 with exact migration signposts.
+- **Lean Context Injection**: Daily `skeinn context` displays State source, lane, Review Window, and Sentinel banner while omitting full `PROJECT.md`/`STRUCTURE.md` unless `--full`/`--keeper`/`--checkpoint`/shaping; `--checkpoint` injects the real Git Review Window and recently closed delivery tasks.
+
 ## 2.5.0
 
 - Redesigned Keeper around **two minimal primitives** (`reviewed_digests` per-artifact hash map + unified `scope`-pinned `findings` ledger) and exact topological horizon calculation (`activeHorizon(depth=2)`):
@@ -8,8 +28,7 @@
   - **Scope-bounded Delta Re-check (Round 2+)**: Follow-up Keeper rounds automatically inject only `dirty` modified artifacts and open blocking findings rather than the full corpus, eliminating fresh-eyes nitpicking spirals.
   - **Non-convergence (`>=`) ping-pong guard**: If blocking findings fail to strictly decrease across two consecutive rounds, `skeinn project ready` halts blind looping without dumping internal chores on the human (unlockable via `--force-round --reason`).
   - **In-Flight Checkpoints & Late-Entering Horizon Review**: Launch pass is a one-time birth certificate (`launch_completed`); distant design docs entering the horizon or designs updated mid-flight via `decision` automatically appear as `dirty` for lightweight `skeinn keeper checkpoint prompt|record` and `skeinn context --checkpoint`.
-  - **Empirical Spike tasks (`kind: "spike"`)**: Can start in `shaping` before Launch without `implements` to resolve physical/empirical unknowns with real evidence. Delivery Tasks cannot `depends_on` a spike (enforced in `validateTasks`, covering both `task plan` and `task update`) — distill findings into Design/Capability or `skeinn record` instead.
-  - **Silent-drift watchdog**: Completing 5 delivery Tasks since the last clean review/checkpoint raises a warning in `skeinn check` and a watch line in `skeinn context` — derived purely from timestamps, no new state; `drift_detected` verdicts deliberately do not reset it, only `clean` does. Checkpoint prompt/context inject the recent delivery Tasks' `touches` so an empty `dirty` set never leaves the reviewer a blank page.
+  - **Empirical Spike tasks (`kind: "spike"`)**: Can start in `shaping` before Launch without `implements` to resolve physical/empirical unknowns with real evidence.
   - **Relaunch escape hatch**: `skeinn keeper reset --reason <text>` clears `reviewed_digests` and logs a decision for genuine full-direction pivots.
 
 ## 2.4.0

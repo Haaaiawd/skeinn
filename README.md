@@ -36,7 +36,7 @@ AI coding feels effortless on small scripts, yet multi-day, multi-module project
 | **Context amnesia** | Compaction or a new session wipes out architecture, boundaries, and earlier corrections | Project truth, decisions, progress, and proof live on disk; a fresh Agent resumes directly |
 | **Generic average output** | Models default to safe statistical averages that look templated and amateur | Targets 1–3 bottleneck domains, **researches how real practitioners operate**, and reflects on project constraints |
 | **First-draft lock-in** | Codes the first plausible idea immediately, hiding expensive rework | Core designs force **at least 2 genuinely viable alternatives** (including a simpler or unconventional angle) |
-| **False-green completion** | Claims "done" while missing files, skipping edge cases, or breaking upstream work | A **fresh independent Keeper** gates launch on the active horizon — minors pass as advisories pinned to their Task/doc and surface at `task start` — while per-artifact digests drive delta re-checks and in-flight drift checkpoints; every Task closes with reproducible evidence |
+| **False-green completion** | Claims "done" while missing files, skipping edge cases, or breaking upstream work | A **fresh independent Keeper** audits build-readiness once; every Task closes with reproducible evidence |
 
 > **Core rule: Skeinn is for the Agent, not the human.**  
 > Multilingual by default — talk naturally in English, Chinese, Japanese, or any language you prefer. The Agent operates the `skeinn` CLI silently in the background.
@@ -57,12 +57,12 @@ You (natural chat in any language)          Agent (silent skeinn CLI on disk)
                                             → reflection → Design delta)
 
 3. Confirm the whole                        Freeze digest → fresh zero-memory
-                                            Keeper gates launch on the active
-                                            horizon; minors pin to scope
+                                            Keeper audits startability, fake
+                                            research, strawmen, and guardrails
 
 4. See working slices, steer anytime        Execute one restartable Task at a
                                             time with guardrails & exact proof;
-                                            drift checkpoints & stale-work flags
+                                            direction shifts flag stale work
 ```
 
 ---
@@ -142,22 +142,17 @@ Open your coding Agent (Claude Code, Cursor, Windsurf, Codex, etc.) in your proj
 skeinn init
 skeinn context --full                         # first entry or after context reset
 skeinn context                                # lean resume between Tasks
-skeinn record --json-file understanding.json
+skeinn record --stdin understanding.json
 skeinn design add core --title "Core system" --kind system
 skeinn capability add ui-ux --title "UI/UX design" --mode external_researched
 skeinn capability confirm ui-ux --scenario "<project scenario>" --source human
 skeinn capability exempt --reason "<why standard engineering suffices>"
 skeinn deliverable add cli-core --title "CLI core" --kind module
-skeinn task plan --json-file work-map.json
+skeinn task plan --stdin work-map.json
 skeinn project ready
-skeinn keeper record --json-file keeper-result.json
-skeinn keeper resolve FND-001 --evidence "<closure proof>"   # close a pinned finding
-skeinn keeper checkpoint prompt --milestone M1               # in-flight drift audit
-skeinn keeper checkpoint record --json-file checkpoint-result.json
-skeinn context --checkpoint                                  # checkpoint-scoped slice
-# kind: "spike" tasks may start during shaping for empirical unknowns
-skeinn task next && skeinn task start TASK-001
-skeinn task done TASK-001 --json-file evidence.json
+skeinn keeper record --stdin keeper-result.json
+skeinn task next && skeinn task focus TASK-001
+skeinn task close TASK-001 --evidence "npm test passed"
 skeinn check
 ```
 
@@ -167,31 +162,4 @@ skeinn check
 
 ## Verify it actually helps
 
-Run `npm test` (38 end-to-end contract tests), or use `skeinn eval scaffold` to run controlled **Evil Eval** comparisons (equal model, tools, workspace, user facts, forced resets, and blind order-swapped judging). See [EVIL_EVAL.md](EVIL_EVAL.md).
-
-### A real measured run
-
-We ran the full L2 relay on **DeepSeek-V4.1-Flash** — a cheap model where framework gains should be most visible. Same harness (opencode), same workspace rules, same brief: build the single-file offline 3-minute retro tool above, across **3 batons with hard memory resets**, with a mid-project pivot to encrypted export/import. Then a hidden oracle, and two independent blind judges scoring sealed X/Y packets in swapped order.
-
-```text
-Hidden oracle (8 objective checks)   baseline 8/8   skeinn 8/8   ← parity
-
-Total cost              baseline  ¥0.42 █████      skeinn  ¥0.82 ██████████
-Wall time               baseline   35 m █████      skeinn   60 m █████████
-Tokens (in+out+reason)  baseline  330 k ████       skeinn  741 k █████████
-Tests shipped           baseline   43   ██████████ skeinn    44  ██████████
-                        (pytest + Playwright)      (zero-dep `node --test`,
-                                                   real headless Chrome)
-```
-
-| Dimension (forced choice) | Judge pass 1 | Judge pass 2 |
-| :--- | :--- | :--- |
-| Intent fidelity & pivot survival | **Skeinn** | Tie |
-| Specialist capability & craft | **Skeinn** | **Skeinn** |
-| Cold-handoff continuity | Tie | Tie |
-| Oracle & proof honesty | Tie | Tie |
-| User burden & ceremony | **Skeinn** | **Skeinn** |
-| Net value per RMB | **Baseline** | **Baseline** |
-| **Overall** | **Skeinn** | **Skeinn** |
-
-*Caveats we keep honest: single run, single scenario, n=2 judges. The evidence judges cited, baseline's cost-efficiency win, and one packet-metadata leak we found and fixed-forward are in the full log: [docs/eval/RELAY-001.md](docs/eval/RELAY-001.md).*
+Run `npm test` (31 end-to-end contract tests), or use `skeinn eval scaffold` to run controlled **Evil Eval** comparisons (equal model, tools, workspace, user facts, forced resets, and blind order-swapped judging). See [EVIL_EVAL.md](EVIL_EVAL.md).

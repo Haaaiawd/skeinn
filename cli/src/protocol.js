@@ -122,8 +122,10 @@ Each Task records:
 - **reads**: every file, document, or artifact the Agent must consume to do this Task. Must be specific
   paths, not categories. If the Agent needs it, list it; if it is not listed, the Agent should not
   depend on it.
-- **touches**: every file, document, or artifact the Task is expected to produce or modify. Must be
-  specific paths. A Task that touches nothing is not a Task.
+- **locks** (optional): machine-checked path/directory prefixes this Task is allowed to modify.
+  When closing a Task, Skeinn automatically derives \`actual_touches\` from Git (no manual \`touches\`
+  shadow checklist required) and flags any edit that crosses declared \`locks\`. Legacy \`touches\`
+  fields are tolerated as historical records.
 - **implements**: the design decision this Task realizes. If no design applies, use a concrete
   \`design_exemption\` instead of leaving the relationship implicit.
 - **guardrails** (recommended): 1–3 concrete specialist red lines or failure checks carried forward
@@ -149,21 +151,32 @@ Understanding loop: describe the whole -> locate consequential uncertainty -> as
 answers and decisions -> iterate core Design surfaces and 1–3 bottleneck Capabilities together -> repeat
 while material uncertainty remains.
 
-Keeper loop: prepare a frozen digest -> fresh Keeper attempts to start from disk and runs the
-anti-laziness & integrity audit -> on \`needs_revision\` or \`blocked\`, absorb every concrete gap into
-project truth, design docs, capability files, or Tasks -> prepare a changed digest -> fresh independent
-verification of closure. Minor gaps also require verification; a changed digest alone never grants a
-pass. Use \`skeinn review --help\` for the state-independent handoff and stage-review guide. The host
-launches the fresh Agent and waits for its recorded verdict before resuming context. Keeper does not
-reappear for every Task.
+Keeper loop (Launch + In-Flight Checkpoint):
+- Launch: \`skeinn project ready\` freezes a horizon-scoped \`prepared_scope\` map (out-of-horizon edits
+  on parallel lanes never invalidate it). A fresh independent Agent runs \`skeinn keeper prompt\` ->
+  \`skeinn context --keeper\` -> \`skeinn keeper record --stdin\`. Zero blocking gaps in the active
+  horizon passes Launch (\`passed\` or \`passed_with_advisories\`), pinning minor advisories to their
+  \`scope\` and seeding the Git Review Window anchor (\`last_reviewed_commit\`). Round 2+ runs in Delta
+  Re-check Mode (prior blocking closures + repair diff zone only).
+- In-Flight Checkpoint: Skeinn tracks two distinct windows — the **Review Window** (anchored at
+  \`last_reviewed_commit\`, NEVER reset by \`focus\`/\`close\` or task splitting) and the **Attribution
+  Window** (anchored at \`focus\` for per-task \`actual_touches\`). When the Review Window turns
+  \`heavy\` (shared surface, >= 8 files, >= 400 lines, >= 3 top-level dirs, modified design doc, or
+  lost anchor), \`skeinn task close\` requires a clean checkpoint (\`skeinn keeper prompt --checkpoint\`
+  -> \`skeinn keeper record --checkpoint --stdin\`) or an explicit covering \`skeinn decision\`.
+- Read-Only Git & Parallel Lanes: Skeinn ONLY runs read-only git commands (never commits or mutates
+  git). Parallel lanes MUST use separate \`git worktree\`s sharing the main worktree's \`.skeinn/\`
+  (auto-detected via \`--git-common-dir\` or explicit \`--state <path>\` / \`SKEINN_STATE\`); each lane
+  may focus one active Task independently.
 
-Delivery loop: select an executable Task -> load exactly referenced context and guardrails -> implement
-and verify -> fill in each acceptance condition's evidence with the actual result -> complete, block
-with recovery conditions, or reopen a blocked or disproven completion after upstream correction ->
-continue.
+Delivery loop: select an executable Task (\`skeinn task list\` / \`skeinn task next\`) -> focus it with
+\`skeinn task focus <id>\` (zero pre-build gate; surfaces pinned advisories and anchors attribution) ->
+implement and verify -> close with \`skeinn task close <id> --evidence "<proof>"\` (or \`--stdin\` for
+per-criterion mapping; \`open\` tasks may also close directly). Block with recovery conditions or
+reopen if upstream changes invalidate evidence.
 
 Evolution loop: when a new idea changes an existing decision, record what changed and why with
-\`skeinn decision --json-file\` (listing affected files and tasks), then update the design document
+\`skeinn decision --stdin\` (listing affected files and tasks), then update the design document
 directly — the current truth always lives in \`.skeinn/\`, not in versioned snapshots. If the change
 affects completed Tasks or an upstream Task is reopened, \`skeinn check\` warns which done Tasks need
 re-verification; reopen them when the change invalidates prior work. Git history preserves old versions;
@@ -245,8 +258,9 @@ recovery source; conversation memory may be incomplete.
 - After a material checkpoint, before an expected context reset, or when handing work to another Agent,
   persist concise completed, current, and executable next progress with skeinn task update.
   Record evidence only after the referenced command, artifact, or observation actually exists.
-- Complete through skeinn task done only after every acceptance condition has its evidence filled
-  with a reproducible result. Report known blind spots and unverified boundaries honestly.
+- Close through \`skeinn task close <id> --evidence "<proof>"\` (or \`--stdin\` for per-criterion
+  mapping) only after every acceptance condition has reproducible evidence. \`actual_touches\` is
+  derived automatically from Git. Report known blind spots and unverified boundaries honestly.
 - A branch, commit, or pull request is a delivery mechanism, not a universal Task requirement. Create one
   when the human or repository workflow asks for it, map it to the Task outcome, and include the verification
   evidence; do not use a PR to disguise an incomplete Task.
@@ -257,12 +271,10 @@ The human's patience is the project's fuel. Do not let several Tasks pass in sil
 
 - **After each Task**: if the Task produced something the human can see or run, show it — run the command,
   open the page, display the output. One real working thing is worth more than a status line.
-- **Every few Tasks or at a natural milestone**: do a staged review. Run the project's own tests, inspect
-  code quality against the design intent, and tell the human what passed and what surprised you. Catch
-  drift while it is cheap to fix.
-  Use a review Task with explicit acceptance and evidence. Turn findings into repair Tasks,
-  block the review with closure conditions, then reopen and reverify it after repairs.
-  See \`skeinn review --help\`; closing a repair Task does not close the review automatically.
+- **When the Sentinel fires (every ~5 closed delivery Tasks or when the Review Window turns heavy)**:
+  run an independent in-flight checkpoint (\`skeinn keeper prompt --checkpoint\` -> \`skeinn context --checkpoint\`
+  -> \`skeinn keeper record --checkpoint --stdin\`). A clean checkpoint advances the Review Window anchor
+  and closes resolved findings; drift findings pin directly onto affected Tasks/Designs.
 - **Before declaring a batch done**: run \`skeinn check\` and the project's own tests together. Both must
   pass. If tests fail or coverage drops, fix before moving on — do not let partial work accumulate behind
   a green-looking summary.
@@ -279,7 +291,7 @@ conditions.
 - **Consequential feedback** (changes design, scope, boundaries, or what "done" means): if the new
   direction is not yet clear, open a clarification round first — \`skeinn clarify start --reason\`,
   ask one batch of material questions, resolve, close — then record the settled change with
-  \`skeinn decision --json-file\` before editing. Update the affected design document or Task. If a done Task
+  \`skeinn decision --stdin\` before editing. Update the affected design document or Task. If a done Task
   is affected, \`skeinn check\` will warn — reopen it if the change invalidates prior evidence. Then edit
   code.
 - **Implementation detail** (a small bug, a color tweak, a wording fix, a test that broke): fix it
@@ -289,20 +301,20 @@ conditions.
 
 Do not narrate this protocol to the human unless it helps them understand a decision, risk, or handoff.`;
 
-export const AGENT_ANCHOR = `<!-- skeinn:v2 -->
+export const AGENT_ANCHOR = `<!-- skeinn:v3 -->
 ## Skeinn
 
-This project uses Skeinn as Agent-only continuity infrastructure. Run \`skeinn context --full\` when entering
-the project or after a context reset; run \`skeinn context\` between Tasks, before substantial work, and
-when the human gives feedback or a direction change. When a Task is active, the command restores its execution protocol, exact state, guardrails, and
-declared context; rerun it before editing after any interruption. Keep project truth, design documents,
-focused capability files (1–3 bottleneck domains with real practitioner research and project reflection,
-or an explicit \`skeinn capability exempt\`), and Tasks current through the CLI, and never ask the human to
-operate Skeinn. When the human changes direction or requests a redesign, open a clarification round
-(\`skeinn clarify start\`) before editing; do not silently reinterpret. Do not rerun Skeinn before every tool
-call: persist and restore at meaningful work boundaries. The installed \`skeinn\` command is the stable
-project-local invocation. If it is not on PATH in a source checkout, use the absolute path to that
-checkout's \`cli/bin/skeinn.js\`; do not guess a relative path from this project.`;
+This project uses Skeinn v3 as Agent-only continuity infrastructure. Run \`skeinn context --full\` when
+entering the project or after a context reset; run \`skeinn context\` between Tasks and after direction
+changes. Focus a Task with \`skeinn task focus <id>\` (surfaces pinned findings and anchors attribution)
+and close with \`skeinn task close <id> --evidence "<proof>"\` (or \`--stdin\` for per-criterion JSON;
+Git automatically derives \`actual_touches\`). Never ask the human to operate Skeinn. When the Sentinel
+recommends a checkpoint or the Review Window turns heavy, run an independent checkpoint via
+\`skeinn keeper prompt --checkpoint\` and \`skeinn keeper record --checkpoint --stdin\`. For parallel lanes,
+use separate \`git worktree\`s sharing the main worktree's \`.skeinn/\` (auto-detected or via \`--state\`).
+When the human changes direction, open \`skeinn clarify start --reason <what changed>\` before editing.
+If \`skeinn\` is not on PATH in a source checkout, invoke the absolute path to that checkout's \`cli/bin/skeinn.js\`.
+<!-- /skeinn -->`;
 
 function renderKeeperGap(item) {
   if (typeof item === 'string') return `  - ${item}`;
@@ -471,13 +483,13 @@ does not block the first Task). Every revision requires fresh verification befor
 }
 \`\`\`
 
-Record the result with \`skeinn keeper record --json-file <result.json>\`. Use \`passed\` only when you are
+Record the result with \`skeinn keeper record --stdin (or --json-file <result.json>)\`. Use \`passed\` only when you are
 a genuinely fresh Agent, could responsibly begin the first Task, and can record \`review.mode\` as
 \`independent\` with concrete isolation evidence.
 If you shaped this project, do not review your own work as independent; ask the host for a fresh Agent,
 or use \`skeinn keeper skip --reason <concrete limitation>\` when isolation is unavailable. Use \`passed_with_advisories\` when ZERO blocking gaps remain in the active horizon and only \`minor\`
 advisories exist — those advisories are pinned to their \`scope\` and surfaced automatically when the
-affected Task starts, without wasting another full review round. Use \`needs_revision\` ONLY when at
+affected Task is focused, without wasting another full review round. Use \`needs_revision\` ONLY when at
 least one \`blocking\` gap remains in the active horizon (or changed repair zone), or \`blocked\` when
 progress requires unavailable authority or external state. Revision requires a changed digest and
 another fresh Keeper. Verify each prior finding
@@ -487,14 +499,13 @@ covering every prior gap. These records are retained with the review.`;
 }
 
 
-export function checkpointProtocol({ milestone = 'in-flight', dirtyArtifacts = [], openFindings = [], recentDoneTasks = [], preparedDigest = '' } = {}) {
+export function checkpointProtocol({ milestone = 'in-flight', dirtyArtifacts = [], openFindings = [], preparedDigest = '' } = {}) {
   return `# Skeinn independent In-Flight Checkpoint
 
 You are a fresh Agent auditing an active build at milestone \`${milestone}\`. Do NOT rewrite code or
 re-run full Launch review. Run \`skeinn context --checkpoint\` and inspect ONLY the incremental slice:
 
 - Dirty / newly-entering horizon artifacts: ${dirtyArtifacts.length ? dirtyArtifacts.join(', ') : 'none (audit open findings & git diff)'}
-- Delivery Tasks completed since last clean review (diff their touches against spec): ${recentDoneTasks.length ? recentDoneTasks.map((t) => `${t.id} "${t.title}"${t.implements ? ` implements ${t.implements}` : ''} → touches: ${t.touches.join(', ')}`).join(' | ') : 'none'}
 - Open pinned findings in scope: ${openFindings.length ? openFindings.map((f) => `${f.id} [${f.scope}]: ${f.text}`).join(' | ') : 'none'}
 - Snapshot digest: \`${preparedDigest || '<computed at record>'}\`
 
@@ -508,7 +519,7 @@ re-run full Launch review. Run \`skeinn context --checkpoint\` and inspect ONLY 
 3. **Evidence & advisory closure**: Verify that claimed acceptance evidence is real (not false green)
    and check whether open pinned findings have reproducible closure evidence.
 
-Record your verdict with \`skeinn keeper checkpoint record --json-file <result.json>\`:
+Record your verdict with \`skeinn keeper record --checkpoint --stdin (or --json-file <result.json>)\`:
 
 \`\`\`json
 {
@@ -584,7 +595,7 @@ concrete evidence.
 
 ## Decision history
 
-Consequential changes to existing decisions go in \`.skeinn/DECISIONS.md\`. Use \`skeinn decision --json-file\`
+Consequential changes to existing decisions go in \`.skeinn/DECISIONS.md\`. Use \`skeinn decision --stdin\`
 to record what changed, why, and which tasks were affected. \`skeinn check\` warns when a done Task is
 marked affected by a later decision or when an upstream dependency is reopened.
 
@@ -620,7 +631,7 @@ growing, not just Skeinn state changing.
 
 Before material execution, run \`skeinn project ready\` to freeze a digest, then ask a fresh Agent to
 run \`skeinn keeper prompt\` and \`skeinn keeper record\`. Repair findings and prepare again;
-a fresh Keeper must verify closure, including minor gaps. See \`skeinn review --help\`.
+blocking gaps in the active horizon require delta re-check; minor advisories pin to scope. See \`skeinn keeper --help\`.
 `;
 
 export const STRUCTURE_TEMPLATE = `# Project structure

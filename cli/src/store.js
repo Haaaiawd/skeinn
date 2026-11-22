@@ -11,6 +11,13 @@ import {
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import {
+  analyzeReviewWindow,
+  deriveTaskActualTouches,
+  inspectGitRepo,
+  normalizeGitPath,
+  snapshotReviewAnchor,
+} from './git.js';
+import {
   agentProtocol,
   AGENT_ANCHOR,
   EXECUTION_PROTOCOL,
@@ -80,38 +87,62 @@ export function findRoot(from = process.cwd()) {
     if (parent === cursor) break;
     cursor = parent;
   }
+  const gitInfo = inspectGitRepo(from);
+  if (gitInfo.isGit && gitInfo.isLinkedWorktree && existsSync(join(gitInfo.mainWorktree, '.skeinn', 'state.json'))) {
+    return gitInfo.topLevel;
+  }
   throw new Error('Skeinn is not initialized. Run skeinn init in the project root.');
 }
 
 export function skeinnPaths(root = findRoot()) {
   const absolute = resolve(root);
-  const skeinn = runtimePaths?.root === absolute ? runtimePaths.skeinn : join(absolute, '.skeinn');
-  return skeinnPathsShape(absolute, skeinn);
+  if (runtimePaths?.root === absolute) return runtimePaths;
+  const localSkeinn = join(absolute, '.skeinn');
+  if (existsSync(join(localSkeinn, 'state.json'))) {
+    return skeinnPathsShape(absolute, localSkeinn, 'local');
+  }
+  const gitInfo = inspectGitRepo(absolute);
+  if (gitInfo.isGit && gitInfo.isLinkedWorktree) {
+    const sharedSkeinn = join(gitInfo.mainWorktree, '.skeinn');
+    if (existsSync(join(sharedSkeinn, 'state.json'))) {
+      return skeinnPathsShape(absolute, sharedSkeinn, 'shared_worktree');
+    }
+  }
+  return skeinnPathsShape(absolute, localSkeinn, 'local');
 }
 
-export function configureRuntime({ stateDir } = {}) {
-  if (!stateDir) {
+export function configureRuntime({ stateDir, state, enforceOutside = false } = {}) {
+  const target = state || stateDir || process.env.SKEINN_STATE;
+  if (!target) {
     runtimePaths = null;
     return null;
   }
   const root = resolve(process.cwd());
-  const skeinn = resolve(stateDir);
-  const fromWorkspace = relative(root, skeinn);
-  if (!fromWorkspace || (!fromWorkspace.startsWith('..') && !isAbsolute(fromWorkspace))) {
-    throw new Error('--state-dir must be outside the scored workspace');
+  const skeinn = resolve(target);
+  if (enforceOutside) {
+    const fromWorkspace = relative(root, skeinn);
+    if (!fromWorkspace || (!fromWorkspace.startsWith('..') && !isAbsolute(fromWorkspace))) {
+      throw new Error('--state-dir must be outside the scored workspace');
+    }
   }
-  runtimePaths = skeinnPathsShape(root, skeinn);
+  runtimePaths = skeinnPathsShape(root, skeinn, 'explicit');
   return { workspace: root, state_dir: skeinn };
 }
 
-export function initProject(root = process.cwd()) {
+export function initProject(root = process.cwd(), options = {}) {
   const paths = skeinnPathsForInit(root);
-  if (existsSync(paths.state)) return { initialized: false, root: paths.root, reason: 'already_initialized' };
+  if (existsSync(paths.state)) {
+    if (options.refreshAgents) {
+      installAgentAnchor(paths.root, { refresh: true });
+      return { initialized: false, refreshed_agents: true, root: paths.root, file: 'AGENTS.md' };
+    }
+    return { initialized: false, root: paths.root, reason: 'already_initialized' };
+  }
   if (paths.skeinn === join(paths.root, '.skeinn') && existsSync(join(paths.root, '.loom', 'state.json'))) {
     throw new Error('Found a legacy .loom/ project. Rename .loom/ to .skeinn/, update any .loom/ paths in tasks.json and AGENTS.md, then run skeinn check.');
   }
   if (existsSync(join(paths.skeinn, 'current')) || existsSync(join(paths.skeinn, 'v1'))) {
-    throw new Error('A legacy Skeinn project was found. Back it up and migrate deliberately; v2 will not overwrite it.');
+    throw new Error('A legacy Skeinn project was found. Back it up and migrate deliberately; v3 will not overwrite it.');
   }
   mkdirSync(paths.design, { recursive: true });
   mkdirSync(paths.capabilities, { recursive: true });
@@ -120,7 +151,8 @@ export function initProject(root = process.cwd()) {
     schema_version: SCHEMA_VERSION,
     project: { name: basename(paths.root), status: 'shaping', created_at: now(), updated_at: now() },
     understanding: { confirmed: [], assumptions: [], unresolved: [] },
-    keeper: { status: 'not_run', attempts: [] },
+    keeper: { status: 'not_run', attempts: [], findings: [], checkpoints: [], reviewed_digests: {}, launch_completed: false, last_reviewed_commit: null, last_reviewed_worktree: {}, last_reviewed_at: null },
+    decision_events: [],
   };
   atomicJson(paths.state, state);
   atomicJson(paths.tasks, { schema_version: SCHEMA_VERSION, tasks: [] });
@@ -129,7 +161,7 @@ export function initProject(root = process.cwd()) {
   writeFileSync(paths.structure, STRUCTURE_TEMPLATE, 'utf8');
   writeFileSync(paths.decisions, '# Decision History\n\nCurrent truth belongs in PROJECT.md and linked design documents. This file preserves consequential superseding decisions.\n', 'utf8');
   const anchored = paths.skeinn === join(paths.root, '.skeinn');
-  if (anchored) installAgentAnchor(paths.root);
+  if (anchored) installAgentAnchor(paths.root, { refresh: Boolean(options.refreshAgents) });
   return {
     initialized: true,
     root: paths.root,
@@ -141,13 +173,14 @@ export function initProject(root = process.cwd()) {
 function skeinnPathsForInit(root) {
   const absolute = resolve(root);
   const skeinn = runtimePaths?.root === absolute ? runtimePaths.skeinn : join(absolute, '.skeinn');
-  return skeinnPathsShape(absolute, skeinn);
+  return skeinnPathsShape(absolute, skeinn, runtimePaths?.root === absolute ? 'explicit' : 'local');
 }
 
-function skeinnPathsShape(root, skeinn) {
+function skeinnPathsShape(root, skeinn, stateMode = 'local') {
   return {
     root,
     skeinn,
+    state_mode: stateMode,
     state: join(skeinn, 'state.json'),
     tasks: join(skeinn, 'tasks.json'),
     deliverables: join(skeinn, 'deliverables.json'),
@@ -160,11 +193,28 @@ function skeinnPathsShape(root, skeinn) {
   };
 }
 
-function installAgentAnchor(root) {
+function installAgentAnchor(root, { refresh = false } = {}) {
   const path = join(root, 'AGENTS.md');
-  const marker = '<!-- skeinn:v2 -->';
-  if (!existsSync(path)) writeFileSync(path, `${AGENT_ANCHOR}\n`, 'utf8');
-  else if (!readFileSync(path, 'utf8').includes(marker)) appendFileSync(path, `\n${AGENT_ANCHOR}\n`, 'utf8');
+  const v3Marker = '<!-- skeinn:v3 -->';
+  const v2Marker = '<!-- skeinn:v2 -->';
+  if (!existsSync(path)) {
+    writeFileSync(path, `${AGENT_ANCHOR}\n`, 'utf8');
+    return;
+  }
+  const existing = readFileSync(path, 'utf8');
+  if (refresh) {
+    const startIdx = existing.includes(v3Marker) ? existing.indexOf(v3Marker) : existing.indexOf(v2Marker);
+    if (startIdx !== -1) {
+      const endMarker = '<!-- /skeinn -->';
+      const endIdx = existing.indexOf(endMarker, startIdx);
+      const before = existing.slice(0, startIdx).trimEnd();
+      const after = endIdx !== -1 ? existing.slice(endIdx + endMarker.length).trimStart() : '';
+      const updated = [before, AGENT_ANCHOR, after].filter(Boolean).join('\n\n') + '\n';
+      writeFileSync(path, updated, 'utf8');
+      return;
+    }
+  }
+  if (!existing.includes(v3Marker)) appendFileSync(path, `\n${AGENT_ANCHOR}\n`, 'utf8');
 }
 
 export function loadProject(root = findRoot()) {
@@ -190,6 +240,10 @@ function ensureKeeperState(state) {
   if (!Array.isArray(state.keeper.checkpoints)) state.keeper.checkpoints = [];
   if (!state.keeper.reviewed_digests || typeof state.keeper.reviewed_digests !== 'object') state.keeper.reviewed_digests = {};
   if (typeof state.keeper.launch_completed !== 'boolean') state.keeper.launch_completed = ['passed', 'passed_with_advisories', 'skipped'].includes(state.keeper.status);
+  if (state.keeper.last_reviewed_commit === undefined) state.keeper.last_reviewed_commit = null;
+  if (!state.keeper.last_reviewed_worktree || typeof state.keeper.last_reviewed_worktree !== 'object') state.keeper.last_reviewed_worktree = {};
+  if (state.keeper.last_reviewed_at === undefined) state.keeper.last_reviewed_at = null;
+  if (!Array.isArray(state.decision_events)) state.decision_events = [];
   return state.keeper;
 }
 
@@ -275,32 +329,32 @@ function computeDirtyArtifacts(currentMap, baselineMap, scopeKeys = null) {
   return keys.filter((k) => currentMap[k] !== baselineMap?.[k]).sort();
 }
 
-const SILENT_DRIFT_TASK_THRESHOLD = 5;
-
-// The clean-review watermark only advances on a 'clean' checkpoint or a passed Launch.
-// drift_detected/blocked verdicts deliberately do NOT refresh it — a failed audit cannot silence the bell.
-function cleanReviewBaselineAt(state) {
-  const cleanCheckpoints = (state.keeper.checkpoints || []).filter((c) => c.verdict === 'clean');
-  if (cleanCheckpoints.length) return cleanCheckpoints.at(-1).at || '';
-  const passes = (state.keeper.attempts || []).filter((a) => ['passed', 'passed_with_advisories'].includes(a.verdict));
-  if (passes.length) return passes.at(-1).at || '';
-  return state.project?.created_at || '';
-}
-
-// Delivery Tasks finished since the last clean independent review — the silent-drift bell.
-// Pure derivation: no new state field; resets automatically when a clean checkpoint records.
-function deliveryTasksDoneSinceCleanReview(state, tasks) {
-  const baselineAt = cleanReviewBaselineAt(state);
-  return tasks.filter((t) => t.status === 'done' && (t.kind || 'delivery') !== 'spike' && (t.completed_at || t.updated_at || '') > baselineAt);
-}
-
-function silentDriftAlert(state, tasks) {
-  if (!state.keeper.launch_completed) return [];
-  return deliveryTasksDoneSinceCleanReview(state, tasks);
-}
-
 function normalizeFindingKey(scope, text) {
   return `${(scope || 'project').trim().toLowerCase()}::${String(text || '').trim().toLowerCase()}`;
+}
+
+// Reviewers write freeform scopes: "task:TASK-003", "TASK-003", compound "task:X / .skeinn/doc.md".
+// Canonical parts: split on ' / ' or ',' (never bare '/' — that's inside real paths), strip the task: prefix.
+function scopeParts(scope) {
+  return String(scope || 'project')
+    .split(/\s+\/\s+|\s*,\s*/)
+    .map((part) => {
+      const clean = part.trim().replaceAll('\\', '/');
+      const taskRef = clean.match(/^task:(.+)$/i);
+      return taskRef ? taskRef[1].trim().toUpperCase() : clean;
+    })
+    .filter(Boolean);
+}
+
+function canonicalScope(scope) {
+  const parts = scopeParts(scope);
+  return parts.length ? parts.join(' / ') : 'project';
+}
+
+// Horizon artifacts are digest keys ("task:TASK-001", ".skeinn/design/x.md"); a finding's scope parts
+// can be bare ids, so membership tests both spellings.
+function scopeTouchesHorizon(scope, horizonSet) {
+  return scopeParts(scope).some((part) => horizonSet.has(part) || horizonSet.has(`task:${part}`));
 }
 
 function upsertFindings(state, rawItems, { sourceRunId, defaultSeverity = 'blocking' } = {}) {
@@ -309,7 +363,7 @@ function upsertFindings(state, rawItems, { sourceRunId, defaultSeverity = 'block
   for (const raw of rawItems || []) {
     const text = typeof raw === 'string' ? raw.trim() : (raw?.gap || raw?.text || '').trim();
     if (!text) continue;
-    const scope = (typeof raw === 'object' && raw?.scope ? String(raw.scope).trim() : '') || 'project';
+    const scope = (typeof raw === 'object' && raw?.scope ? canonicalScope(raw.scope) : '') || 'project';
     const severity = (typeof raw === 'object' && ['blocking', 'minor'].includes(raw?.severity)) ? raw.severity : defaultSeverity;
     const key = normalizeFindingKey(scope, text);
     const existing = keeper.findings.find((f) => f.status === 'open' && normalizeFindingKey(f.scope, f.text) === key);
@@ -340,7 +394,7 @@ function findingsForTask(state, task) {
   const scopes = new Set([task.id]);
   for (const ref of task.reads || []) scopes.add(ref.replaceAll('\\', '/'));
   if (task.implements?.trim()) scopes.add(task.implements.trim().split('#')[0].replaceAll('\\', '/'));
-  return keeper.findings.filter((f) => f.status === 'open' && scopes.has(f.scope));
+  return keeper.findings.filter((f) => f.status === 'open' && scopeParts(f.scope).some((part) => scopes.has(part)));
 }
 
 function ensureClarify(state) {
@@ -360,7 +414,7 @@ function validateState(state) {
 function validateTasks(tasks) {
   if (!Array.isArray(tasks)) throw new Error('tasks.json tasks must be an array');
   const ids = new Set();
-  let active = 0;
+  const activeByLane = new Map();
   for (const task of tasks) {
     if (!task.id || ids.has(task.id)) throw new Error(`Task id is missing or duplicated: ${task.id || '<missing>'}`);
     ids.add(task.id);
@@ -369,7 +423,11 @@ function validateTasks(tasks) {
     if (!VALID_TASK_STATUS.has(task.status)) throw new Error(`${task.id} has invalid status ${task.status}`);
     if (!Array.isArray(task.depends_on) || !Array.isArray(task.reads)) throw new Error(`${task.id} dependencies and reads must be arrays`);
     if (!task.reads.length) throw new Error(`${task.id} reads must list at least one specific file or artifact`);
-    if (!Array.isArray(task.touches) || !task.touches.length) throw new Error(`${task.id} touches must list at least one specific file or artifact`);
+    if (task.touches !== undefined && !Array.isArray(task.touches)) throw new Error(`${task.id} touches must be an array if provided`);
+    if (task.locks !== undefined) {
+      if (!Array.isArray(task.locks)) throw new Error(`${task.id} locks must be an array of paths/prefixes`);
+      for (const lock of task.locks) if (typeof lock !== 'string' || !lock.trim()) throw new Error(`${task.id} locks entries must be non-empty strings`);
+    }
     if (!Array.isArray(task.boundaries) || !task.boundaries.length) throw new Error(`${task.id} boundaries must list at least one thing this Task does NOT do`);
     const hasAcceptance = Array.isArray(task.acceptance) && task.acceptance.length > 0;
     const hasDoneWhen = Array.isArray(task.done_when) && task.done_when.length > 0;
@@ -403,19 +461,21 @@ function validateTasks(tasks) {
       if (!Array.isArray(task.covers)) throw new Error(`${task.id} covers must be an array of deliverable IDs`);
       for (const dlvId of task.covers) if (typeof dlvId !== 'string') throw new Error(`${task.id} covers entries must be deliverable ID strings`);
     }
-    if (task.status === 'active') active += 1;
+    if (task.status === 'active') {
+      const lane = task.lane || 'default';
+      if (activeByLane.has(lane)) {
+        throw new Error(`Only one Task may be active per lane (lane "${lane}" already has ${activeByLane.get(lane)})`);
+      }
+      activeByLane.set(lane, task.id);
+    }
   }
-  if (active > 1) throw new Error('Only one Task may be active');
-  const taskById = new Map(tasks.map((task) => [task.id, task]));
+  const byId = new Map(tasks.map((t) => [t.id, t]));
   for (const task of tasks) {
-    for (const dep of task.depends_on) if (!ids.has(dep)) throw new Error(`${task.id} depends on missing Task ${dep}`);
-  }
-  // A spike produces empirical findings, not deliverables: delivery Tasks must never wire one into the DAG.
-  // Checked here (not at import) so `task update` cannot retro-fit a depended-on Task into a spike either.
-  for (const task of tasks) {
-    if ((task.kind || 'delivery') === 'spike') continue;
     for (const dep of task.depends_on) {
-      if (taskById.get(dep)?.kind === 'spike') throw new Error(`${task.id} cannot depend on spike Task ${dep}; distill spike findings into Design/Capability or skeinn record instead of wiring a spike into the delivery DAG.`);
+      if (!ids.has(dep)) throw new Error(`${task.id} depends on missing Task ${dep}`);
+      if ((task.kind || 'delivery') === 'delivery' && byId.get(dep)?.kind === 'spike') {
+        throw new Error(`Delivery Task ${task.id} cannot depend on exploratory spike ${dep}; absorb spike findings into Design/Decisions instead`);
+      }
     }
   }
   detectCycles(tasks);
@@ -913,6 +973,7 @@ export function importTasks(payload, root = findRoot()) {
       depends_on: raw.depends_on || [],
       reads: raw.reads || ['.skeinn/PROJECT.md'],
       touches: raw.touches || [],
+      locks: raw.locks || [],
       implements: raw.implements || '',
       design_exemption: raw.design_exemption || '',
       capability_hooks: raw.capability_hooks || [],
@@ -938,13 +999,32 @@ export function importTasks(payload, root = findRoot()) {
 }
 
 export function taskSummary(tasks) {
+  const activeTasks = tasks.filter((task) => task.status === 'active');
+  const activeByLane = {};
+  for (const t of activeTasks) activeByLane[t.lane || 'default'] = t.id;
   return {
     total: tasks.length,
     open: tasks.filter((task) => task.status === 'open').length,
-    active: tasks.find((task) => task.status === 'active')?.id || null,
+    active: activeTasks[0]?.id || null,
+    active_by_lane: activeByLane,
     blocked: tasks.filter((task) => task.status === 'blocked').length,
     done: tasks.filter((task) => task.status === 'done').length,
   };
+}
+
+export function listTasks(options = {}, root = findRoot()) {
+  const { taskStore } = loadProject(root);
+  const items = options.status
+    ? taskStore.tasks.filter((t) => t.status === options.status)
+    : taskStore.tasks;
+  return items.map((t) => ({
+    id: t.id,
+    status: t.status,
+    kind: t.kind || 'delivery',
+    ...(t.lane ? { lane: t.lane } : {}),
+    title: t.title,
+    depends_on: t.depends_on || [],
+  }));
 }
 
 export function getTask(id, root = findRoot()) {
@@ -1085,91 +1165,165 @@ export function reopenTask(id, options = {}, root = findRoot()) {
   return task;
 }
 
-export function startTask(id, root = findRoot()) {
+function dirtyDesignDocsInHorizon(paths, state, tasks) {
+  const currentDigests = artifactDigests(paths, tasks, state);
+  const horizon = activeHorizon(tasks, paths, 2);
+  return computeDirtyArtifacts(currentDigests, state.keeper.reviewed_digests, horizon.artifacts)
+    .filter((k) => k.startsWith('.skeinn/design/'));
+}
+
+function completedDeliveryTasksSinceLastReview(state, tasks) {
+  const lastAt = state.keeper.last_reviewed_at || state.keeper.checkpoints.filter((c) => c.verdict === 'clean').at(-1)?.at || '';
+  return tasks.filter((t) => t.status === 'done' && (t.kind || 'delivery') === 'delivery' && (!lastAt || (t.completed_at || '') > lastAt));
+}
+
+function hasCoveringDecisionForWindow(state, taskId) {
+  const lastAt = state.keeper.last_reviewed_at || '';
+  const events = state.decision_events || [];
+  return events.some((ev) => {
+    if (lastAt && ev.at <= lastAt) return false;
+    if (!ev.affected_tasks || !ev.affected_tasks.length) return true;
+    return ev.affected_tasks.includes(taskId);
+  });
+}
+
+function checkLockViolations(actualTouches, locks) {
+  if (!Array.isArray(locks) || !locks.length || !Array.isArray(actualTouches) || !actualTouches.length) return [];
+  const normalizedLocks = locks.map(normalizeGitPath).filter(Boolean);
+  return actualTouches.filter((file) => {
+    const f = normalizeGitPath(file);
+    return !normalizedLocks.some((lock) => (lock.endsWith('/') ? f.startsWith(lock) : f === lock || f.startsWith(`${lock}/`)));
+  });
+}
+
+export function focusTask(id, options = {}, root = findRoot()) {
   const { paths, state, taskStore } = loadProject(root);
-  if (taskStore.tasks.some((task) => task.status === 'active')) throw new Error('Another Task is already active');
-  const task = taskStore.tasks.find((item) => item.id === id);
-  if (!task || task.status !== 'open') throw new Error(`${id} is not open`);
-  const isSpike = task.kind === 'spike';
-  if (!isSpike) {
-    const latestKeeper = state.keeper.attempts.at(-1);
-    const passedStatus = ['passed', 'passed_with_advisories'].includes(state.keeper.status);
-    const attestedPass = passedStatus && latestKeeper?.review?.mode === 'independent';
-    if (passedStatus && !attestedPass) throw new Error('The recorded Keeper pass has no independent review provenance. Obtain a fresh Keeper review (see skeinn review --help) or record an explicit skip: skeinn keeper skip --reason <limitation>.');
-    if (!state.keeper.launch_completed && !['passed', 'passed_with_advisories', 'skipped'].includes(state.keeper.status)) {
-      throw new Error('The one-time Keeper handoff has not passed. Run skeinn keeper prompt.');
-    }
+  const gitInfo = inspectGitRepo(paths.root);
+  const lane = options.lane || gitInfo.lane || 'default';
+  const existingOnLane = taskStore.tasks.find((task) => task.status === 'active' && (task.lane || 'default') === lane);
+  if (existingOnLane && existingOnLane.id !== id) {
+    throw new Error(`Lane "${lane}" already has an active Task (${existingOnLane.id}). Close or block it before focusing another Task on this lane.`);
   }
+  const task = taskStore.tasks.find((item) => item.id === id);
+  if (!task || !['open', 'active'].includes(task.status)) throw new Error(`${id} is not open`);
   assertTaskIntegrityClassification(task, root);
   const pinned = findingsForTask(state, task);
   const blockingPinned = pinned.filter((f) => f.severity === 'blocking');
   if (blockingPinned.length) {
-    throw new Error(`${id} has open blocking findings pinned to its scope:\n- ${blockingPinned.map((f) => `${f.id} [${f.scope}]: ${f.text}`).join('\n- ')}\nResolve each with skeinn keeper resolve <id> --evidence "<proof>" before starting.`);
+    throw new Error(`${id} has open blocking findings pinned to its scope:\n- ${blockingPinned.map((f) => `${f.id} [${f.scope}]: ${f.text}`).join('\n- ')}\nResolve each with skeinn keeper resolve <id> --evidence "<proof>" before focusing.`);
   }
   const done = new Set(taskStore.tasks.filter((item) => item.status === 'done').map((item) => item.id));
   const missing = task.depends_on.filter((dep) => !done.has(dep));
   if (missing.length) throw new Error(`${id} has incomplete dependencies: ${missing.join(', ')}`);
   for (const ref of task.reads) readContextDocument(paths, ref);
   task.status = 'active';
+  task.lane = lane;
+  if (!task.focused_at_commit && gitInfo.head) task.focused_at_commit = gitInfo.head;
+  if (!task.focused_at) task.focused_at = now();
   task.updated_at = now();
   validateTasks(taskStore.tasks);
   atomicJson(paths.tasks, taskStore);
-  if (!isSpike || state.project.status !== 'shaping') state.project.status = 'building';
-  state.project.updated_at = now();
-  atomicJson(paths.state, state);
+  if (task.kind !== 'spike' && state.project.status === 'build_ready') {
+    state.project.status = 'building';
+    state.project.updated_at = now();
+    atomicJson(paths.state, state);
+  }
   const advisories = pinned.filter((f) => f.severity === 'minor').map((f) => `${f.id} [${f.scope}]: ${f.text}`);
   return {
     ...task,
     ...(advisories.length ? { pinned_advisories: advisories } : {}),
     next: advisories.length
       ? `This Task has ${advisories.length} pinned advisory item(s) — address them during implementation and close via skeinn keeper resolve <id> --evidence "<proof>". Run skeinn context before editing.`
-      : 'Run skeinn context to load the execution protocol, guardrails, and every file in reads before editing.',
+      : 'Run skeinn context to load the Task, guardrails, and reads before editing.',
   };
 }
 
-export function completeTask(id, payload, root = findRoot()) {
+export function closeTask(id, payload, root = findRoot()) {
   const { paths, state, taskStore } = loadProject(root);
   const task = taskStore.tasks.find((item) => item.id === id);
   if (!task) throw new Error(`Task not found: ${id}`);
-  if (task.status !== 'active') throw new Error(`${id} is not active`);
-  if (!Array.isArray(payload.evidence) || !payload.evidence.length) throw new Error('Completing a Task requires concrete evidence');
+  if (!['open', 'active'].includes(task.status)) throw new Error(`${id} must be open or active to close (current: ${task.status})`);
+  const done = new Set(taskStore.tasks.filter((item) => item.status === 'done').map((item) => item.id));
+  const missingDeps = task.depends_on.filter((dep) => !done.has(dep));
+  if (missingDeps.length) throw new Error(`${id} has incomplete dependencies: ${missingDeps.join(', ')}`);
+
   assertTaskIntegrityClassification(task, root);
-  const missingOutputs = missingTaskOutputs(task, paths);
-  if (missingOutputs.length) throw new Error(`${id} declared output does not exist:\n- ${missingOutputs.join('\n- ')}`);
+
+  const pinned = findingsForTask(state, task);
+  const blockingPinned = pinned.filter((f) => f.severity === 'blocking');
+  if (blockingPinned.length) {
+    throw new Error(`${id} has open blocking findings pinned to its scope:\n- ${blockingPinned.map((f) => `${f.id} [${f.scope}]: ${f.text}`).join('\n- ')}\nResolve each with skeinn keeper resolve <id> --evidence "<proof>" before closing.`);
+  }
+
+  // Exact Heavy Window Gate Predicate:
+  // Refuse close iff windowHeavy && no clean checkpoint since anchor && no covering decision since anchor
+  const dirtyDesigns = dirtyDesignDocsInHorizon(paths, state, taskStore.tasks);
+  const reviewWindow = analyzeReviewWindow(paths.root, state.keeper, taskStore.tasks, { dirtyDesignDocs: dirtyDesigns });
+  const isSpike = task.kind === 'spike';
+  const windowHeavy = reviewWindow.level === 'heavy';
+  const hasCleanSinceAnchor = false;
+  const hasCoveringDecision = hasCoveringDecisionForWindow(state, task.id);
+  if (!isSpike && state.keeper.launch_completed && windowHeavy && !hasCleanSinceAnchor && !hasCoveringDecision) {
+    throw new Error(`Cannot close ${id}: review window is heavy (${reviewWindow.reasons.join('; ')}). Run an independent checkpoint (skeinn keeper prompt --checkpoint -> skeinn keeper record --checkpoint) or record an explicit covering decision (skeinn decision) first.`);
+  }
+
+  // Support single-line --evidence shortcut (auto-maps to all acceptance criteria)
+  let normalizedPayload = payload || {};
+  if (typeof normalizedPayload.evidence_line === 'string' && normalizedPayload.evidence_line.trim()) {
+    const line = normalizedPayload.evidence_line.trim();
+    if (line.length < 5) throw new Error('--evidence requires concrete proof (at least 5 characters)');
+    normalizedPayload = {
+      evidence: [line],
+      acceptance_results: (task.acceptance || []).map((acc) => ({ criterion: acc.criterion, evidence: line })),
+      checks: (task.done_when || []).map((criterion) => ({ criterion, evidence: [line] })),
+    };
+  }
+
+  if (!Array.isArray(normalizedPayload.evidence) || !normalizedPayload.evidence.length) {
+    throw new Error('Closing a Task requires concrete evidence (--evidence "<proof>" or --stdin)');
+  }
+
   const hasAcceptance = Array.isArray(task.acceptance) && task.acceptance.length > 0;
   if (hasAcceptance) {
-    if (!Array.isArray(payload.acceptance_results)) throw new Error('Completing a Task with acceptance[] requires acceptance_results[]');
+    if (!Array.isArray(normalizedPayload.acceptance_results)) throw new Error('Closing a Task with acceptance[] requires acceptance_results[] (or --evidence "<proof>")');
     const criteria = new Set(task.acceptance.map((acc) => acc.criterion));
     const seen = new Set();
-    for (const result of payload.acceptance_results) {
+    for (const result of normalizedPayload.acceptance_results) {
       if (!result || !criteria.has(result.criterion)) throw new Error('acceptance_results criterion must match an exact acceptance criterion');
       if (seen.has(result.criterion)) throw new Error(`Duplicate acceptance result: ${result.criterion}`);
       if (!result.evidence || typeof result.evidence !== 'string' || result.evidence.length < 5) throw new Error(`acceptance result requires concrete evidence: ${result.criterion}`);
       seen.add(result.criterion);
     }
     const missingResults = task.acceptance.filter((acc) => !seen.has(acc.criterion));
-    if (missingResults.length) throw new Error(`Task completion is missing acceptance results:\n- ${missingResults.map((acc) => acc.criterion).join('\n- ')}`);
-    for (const result of payload.acceptance_results) {
+    if (missingResults.length) throw new Error(`Task close is missing acceptance results:\n- ${missingResults.map((acc) => acc.criterion).join('\n- ')}`);
+    for (const result of normalizedPayload.acceptance_results) {
       const acc = task.acceptance.find((acc) => acc.criterion === result.criterion);
       acc.evidence = result.evidence;
     }
-    task.status = 'done';
-    task.evidence = [...task.evidence, ...payload.evidence, { type: 'acceptance_results', results: payload.acceptance_results, at: now() }];
+    task.evidence = [...task.evidence, ...normalizedPayload.evidence, { type: 'acceptance_results', results: normalizedPayload.acceptance_results, at: now() }];
   } else {
-    if (!Array.isArray(payload.checks)) throw new Error('Completing a Task with done_when[] requires checks for every done_when criterion');
+    if (!Array.isArray(normalizedPayload.checks)) throw new Error('Closing a Task with done_when[] requires checks for every done_when criterion');
     const criteria = new Set(task.done_when);
     const seen = new Set();
-    for (const check of payload.checks) {
-      if (!check || !criteria.has(check.criterion)) throw new Error('Task completion check must quote an exact done_when criterion');
-      if (seen.has(check.criterion)) throw new Error(`Duplicate Task completion check: ${check.criterion}`);
-      if (!Array.isArray(check.evidence) || !check.evidence.length) throw new Error(`Task completion check requires evidence: ${check.criterion}`);
+    for (const check of normalizedPayload.checks) {
+      if (!check || !criteria.has(check.criterion)) throw new Error('Task close check must quote an exact done_when criterion');
+      if (seen.has(check.criterion)) throw new Error(`Duplicate Task close check: ${check.criterion}`);
+      if (!Array.isArray(check.evidence) || !check.evidence.length) throw new Error(`Task close check requires evidence: ${check.criterion}`);
       seen.add(check.criterion);
     }
     const missingChecks = task.done_when.filter((criterion) => !seen.has(criterion));
-    if (missingChecks.length) throw new Error(`Task completion is missing done_when checks:\n- ${missingChecks.join('\n- ')}`);
-    task.status = 'done';
-    task.evidence = [...task.evidence, ...payload.evidence, { type: 'done_when_checks', checks: payload.checks, at: now() }];
+    if (missingChecks.length) throw new Error(`Task close is missing done_when checks:\n- ${missingChecks.join('\n- ')}`);
+    task.evidence = [...task.evidence, ...normalizedPayload.evidence, { type: 'done_when_checks', checks: normalizedPayload.checks, at: now() }];
   }
+
+  // Auto-derive actual_touches from Git Attribution Window (fallback to declared touches in non-git repos)
+  const derived = deriveTaskActualTouches(paths.root, task);
+  task.actual_touches = derived.git ? derived.files : (task.touches || []);
+  const lockViolations = checkLockViolations(task.actual_touches, task.locks);
+  if (lockViolations.length) task.lock_violations = lockViolations;
+  else delete task.lock_violations;
+
+  task.status = 'done';
   task.progress = { ...task.progress, current: 'complete', next: '' };
   task.completed_at = now();
   task.updated_at = now();
@@ -1179,8 +1333,16 @@ export function completeTask(id, payload, root = findRoot()) {
     state.project.status = 'complete';
     state.project.updated_at = now();
     atomicJson(paths.state, state);
+  } else if (state.project.status === 'build_ready') {
+    state.project.status = 'building';
+    state.project.updated_at = now();
+    atomicJson(paths.state, state);
   }
-  return task;
+  return {
+    ...task,
+    review_window: { level: reviewWindow.level, files: reviewWindow.files.length, lines_changed: reviewWindow.lines_changed, anchor_status: reviewWindow.anchor_status },
+    ...(lockViolations.length ? { warning: `actual_touches exceeded declared locks: ${lockViolations.join(', ')}` } : {}),
+  };
 }
 
 export function markReady(root = findRoot(), options = {}) {
@@ -1213,10 +1375,16 @@ export function markReady(root = findRoot(), options = {}) {
   if (integrityErrors.length) errors.push(`Task integrity classification is unresolved:\n  - ${integrityErrors.join('\n  - ')}`);
   if (highOpen.length) errors.push(`High-impact questions remain open: ${highOpen.map((item) => item.id).join(', ')}`);
   const currentDigests = artifactDigests(paths, taskStore.tasks, state);
-  const digest = overallDigest(currentDigests);
+  const horizon = activeHorizon(taskStore.tasks, paths, 2);
+  const preparedScope = {};
+  for (const key of horizon.artifacts) {
+    if (key in currentDigests) preparedScope[key] = currentDigests[key];
+  }
+  if ('state:capability_exemption' in currentDigests) preparedScope['state:capability_exemption'] = currentDigests['state:capability_exemption'];
+  const digest = overallDigest(preparedScope);
   const latestKeeper = state.keeper.attempts.at(-1);
   if (['needs_revision', 'blocked'].includes(state.keeper.status) && latestKeeper?.prepared_digest === digest) {
-    errors.push('Keeper requested revision, but project truth and Task definitions have not changed');
+    errors.push('Keeper requested revision, but active-horizon project truth and Task definitions have not changed');
   }
   // Convergence guard: if last two failed attempts did not strictly reduce blocking count (>=), pause blind looping
   const failedAttempts = state.keeper.attempts.filter((a) => ['needs_revision', 'blocked'].includes(a.verdict));
@@ -1233,13 +1401,13 @@ export function markReady(root = findRoot(), options = {}) {
     errors.push('--force-round requires a concrete --reason (at least 10 characters)');
   }
   if (errors.length) throw new Error(`Project is not ready for Keeper:\n- ${errors.join('\n- ')}`);
-  const horizon = activeHorizon(taskStore.tasks, paths, 2);
   const priorBaseline = latestKeeper?.artifact_digests || state.keeper.reviewed_digests || {};
   const dirty = computeDirtyArtifacts(currentDigests, priorBaseline, horizon.artifacts);
   delete state.keeper.auto_passed;
   state.project.status = 'ready_for_keeper';
   state.project.updated_at = now();
   state.keeper.prepared_digest = digest;
+  state.keeper.prepared_scope = preparedScope;
   state.keeper.prepared_artifact_digests = currentDigests;
   state.keeper.prepared_horizon_tasks = horizon.taskIds;
   state.keeper.prepared_horizon_artifacts = horizon.artifacts;
@@ -1304,8 +1472,17 @@ export function recordKeeper(payload, root = findRoot()) {
   if (state.keeper.attempts.some((attempt) => attempt.run_id === payload.run_id)) throw new Error(`Keeper run_id was already used: ${payload.run_id}`);
   if (!payload.prepared_digest || payload.prepared_digest !== state.keeper.prepared_digest) throw new Error('Keeper result prepared_digest does not match the current ready state');
   const currentDigests = artifactDigests(paths, taskStore.tasks, state);
-  const currentDigest = overallDigest(currentDigests);
-  if (currentDigest !== state.keeper.prepared_digest) throw new Error('Project truth changed after skeinn project ready; prepare a new Keeper attempt');
+  const scopeEntries = Object.entries(state.keeper.prepared_scope || {});
+  if (scopeEntries.length) {
+    for (const [key, expected] of scopeEntries) {
+      if (currentDigests[key] !== expected) {
+        throw new Error(`Active-horizon artifact changed after skeinn project ready (${key}); prepare a new Keeper attempt`);
+      }
+    }
+  } else {
+    const currentDigest = overallDigest(currentDigests);
+    if (currentDigest !== state.keeper.prepared_digest) throw new Error('Project truth changed after skeinn project ready; prepare a new Keeper attempt');
+  }
   if (isPass) {
     const openFindings = new Map();
     for (const attempt of state.keeper.attempts) {
@@ -1328,7 +1505,7 @@ export function recordKeeper(payload, root = findRoot()) {
     const sev = g.severity || 'blocking';
     if (sev !== 'blocking') return false;
     // Out-of-horizon blocking observations auto-downgrade to minor advisory
-    if (g.scope && !horizonSet.has(g.scope)) return false;
+    if (g.scope && !scopeTouchesHorizon(g.scope, horizonSet)) return false;
     return true;
   }).length;
   const attempt = {
@@ -1372,12 +1549,16 @@ export function recordKeeper(payload, root = findRoot()) {
       if (key in currentDigests) state.keeper.reviewed_digests[key] = currentDigests[key];
     }
     state.keeper.launch_completed = true;
+    const anchorSnap = snapshotReviewAnchor(paths.root);
+    state.keeper.last_reviewed_commit = anchorSnap.commit;
+    state.keeper.last_reviewed_worktree = anchorSnap.worktree;
+    state.keeper.last_reviewed_at = now();
     state.project.status = 'build_ready';
   } else {
     const normalizedGaps = (payload.gaps || []).map((g) => {
       if (typeof g === 'string') return { gap: g, scope: 'project', severity: 'blocking' };
       const scope = g.scope || 'project';
-      const sev = g.severity === 'minor' || (scope !== 'project' && !horizonSet.has(scope)) ? 'minor' : 'blocking';
+      const sev = g.severity === 'minor' || (scope !== 'project' && !scopeTouchesHorizon(scope, horizonSet)) ? 'minor' : 'blocking';
       return { ...g, scope, severity: sev };
     });
     upsertFindings(state, normalizedGaps, { sourceRunId: payload.run_id, defaultSeverity: 'blocking' });
@@ -1424,14 +1605,10 @@ export function getCheckpointPrompt(options = {}, root = findRoot()) {
   const horizon = activeHorizon(taskStore.tasks, paths, 2);
   const dirty = computeDirtyArtifacts(currentDigests, state.keeper.reviewed_digests, horizon.artifacts);
   const openFindings = state.keeper.findings.filter((f) => f.status === 'open');
-  // Even with dirty === 0 (pure code drift, no declaration churn) the reviewer needs the
-  // recent delivery slice — its touches list is exactly what to diff against spec.
-  const recentDone = deliveryTasksDoneSinceCleanReview(state, taskStore.tasks).map((t) => ({ id: t.id, title: t.title, implements: t.implements || '', touches: t.touches || [] }));
   return checkpointProtocol({
     milestone: options.milestone || 'in-flight',
     dirtyArtifacts: dirty,
     openFindings,
-    recentDoneTasks: recentDone,
     preparedDigest: overallDigest(currentDigests),
   });
 }
@@ -1467,6 +1644,10 @@ export function recordCheckpoint(payload, root = findRoot()) {
     for (const key of horizon.artifacts) {
       if (key in currentDigests) state.keeper.reviewed_digests[key] = currentDigests[key];
     }
+    const anchorSnap = snapshotReviewAnchor(paths.root);
+    state.keeper.last_reviewed_commit = anchorSnap.commit;
+    state.keeper.last_reviewed_worktree = anchorSnap.worktree;
+    state.keeper.last_reviewed_at = now();
   }
   const record = {
     id: nextId(state.keeper.checkpoints, 'CHK'),
@@ -1490,11 +1671,22 @@ export function recordCheckpoint(payload, root = findRoot()) {
 
 export function skipKeeper(reason, root = findRoot()) {
   if (!reason || reason.length < 10) throw new Error('Skipping Keeper requires a concrete reason');
-  const { paths, state } = loadProject(root);
+  const { paths, state, taskStore } = loadProject(root);
   if (state.project.status !== 'ready_for_keeper') throw new Error('Keeper can only be skipped after skeinn project ready');
+  const currentDigests = artifactDigests(paths, taskStore.tasks, state);
+  const reviewedScope = state.keeper.prepared_horizon_artifacts?.length
+    ? state.keeper.prepared_horizon_artifacts
+    : Object.keys(currentDigests);
+  for (const key of reviewedScope) {
+    if (key in currentDigests) state.keeper.reviewed_digests[key] = currentDigests[key];
+  }
   state.keeper.status = 'skipped';
   state.keeper.launch_completed = true;
   state.keeper.skip_reason = reason;
+  const anchorSnap = snapshotReviewAnchor(paths.root);
+  state.keeper.last_reviewed_commit = anchorSnap.commit;
+  state.keeper.last_reviewed_worktree = anchorSnap.worktree;
+  state.keeper.last_reviewed_at = now();
   state.project.status = 'build_ready';
   state.project.updated_at = now();
   atomicJson(paths.state, state);
@@ -1590,14 +1782,24 @@ export function clarifyStatus(root = findRoot()) {
 }
 
 export function recordDecision(payload, root = findRoot()) {
-  if (!payload || !payload.summary || payload.summary.length < 10) throw new Error('Decision requires --summary (what changed and why)');
-  if (!payload.changes || !Array.isArray(payload.changes) || !payload.changes.length) throw new Error('Decision requires --changes (array of affected files or decisions)');
-  const { paths } = loadProject(root);
+  if (!payload || !payload.summary || payload.summary.length < 10) throw new Error('Decision requires summary (at least 10 characters)');
+  if (!payload.changes || !Array.isArray(payload.changes) || !payload.changes.length) throw new Error('Decision requires changes (array of affected files or decisions)');
+  const { paths, state } = loadProject(root);
+  const timestamp = now();
   const id = `D-${new Date().toISOString().slice(0, 10)}-${Date.now().toString(36).slice(-4)}`;
-  const entry = `## ${id}: ${payload.summary}\n\n- Changed: ${payload.changes.join(', ')}\n${payload.affected_tasks ? `- Affected tasks: ${payload.affected_tasks.join(', ')}\n` : ''}- At: ${now()}\n`;
+  const entry = `## ${id}: ${payload.summary}\n\n- Changed: ${payload.changes.join(', ')}\n${payload.affected_tasks ? `- Affected tasks: ${payload.affected_tasks.join(', ')}\n` : ''}- At: ${timestamp}\n`;
   const existing = readFileSync(paths.decisions, 'utf8');
   const separator = existing.endsWith('\n') ? '\n' : '\n\n';
   writeFileSync(paths.decisions, existing + separator + entry, 'utf8');
+  state.decision_events.push({
+    id,
+    at: timestamp,
+    summary: payload.summary,
+    changes: payload.changes,
+    affected_tasks: payload.affected_tasks || [],
+  });
+  state.project.updated_at = timestamp;
+  atomicJson(paths.state, state);
   return { id, summary: payload.summary, changes: payload.changes, affected_tasks: payload.affected_tasks || [] };
 }
 
@@ -1617,7 +1819,12 @@ export function compileContext(options = {}, root = findRoot()) {
   const designs = listDesigns(root);
   const capabilities = listCapabilities(root);
   const summary = taskSummary(taskStore.tasks);
-  const task = options.taskId ? getTask(options.taskId, root) : taskStore.tasks.find((item) => item.status === 'active');
+  const gitInfo = inspectGitRepo(paths.root);
+  const lane = gitInfo.lane || 'default';
+  const task = options.taskId
+    ? getTask(options.taskId, root)
+    : (taskStore.tasks.find((item) => item.status === 'active' && (item.lane || 'default') === lane)
+      || taskStore.tasks.find((item) => item.status === 'active'));
   const next = nextTask(taskStore.tasks);
   const blockedTasks = taskStore.tasks.filter((item) => item.status === 'blocked');
   const blockedLine = blockedTasks.length
@@ -1631,13 +1838,13 @@ export function compileContext(options = {}, root = findRoot()) {
   const recommendation = clarify.active
     ? `Clarification round OPEN: ${clarify.reason} (rounds recorded: ${clarify.rounds.length}). Pause material work — do not edit code or Tasks until the round closes. Look up every fact discoverable from the workspace yourself; ask the human only the decision questions in the current frontier, each carrying your recommended answer. Record the batch with \`skeinn clarify resolve --json-file\`, then \`skeinn clarify close\`.${frontierBlock}`
     : state.project.status === 'ready_for_keeper'
-    ? 'Keeper handoff pending. The host must open a fresh Agent without inherited conversation, provide the workspace and CLI paths, and ask it to run `skeinn keeper prompt`. Wait for `skeinn keeper record`, then resume `skeinn context`. See `skeinn review --help` for the complete handoff.'
+    ? 'Keeper handoff pending. The host must open a fresh Agent without inherited conversation, provide the workspace and CLI paths, and ask it to run `skeinn keeper prompt`. Wait for `skeinn keeper record`, then resume `skeinn context`. See `skeinn keeper --help`.'
     : ['needs_revision', 'blocked'].includes(state.keeper.status)
-      ? 'Resolve the Keeper findings in the source documents and Tasks, run `skeinn project ready`, and obtain a fresh independent review. A changed digest does not prove findings are closed. See `skeinn review --help`.'
+      ? 'Resolve the Keeper findings in the source documents and Tasks, run `skeinn project ready`, and obtain a fresh independent review. See `skeinn keeper --help`.'
     : task
-    ? `You have an active Task: ${task.id}. Read the Active Task, its guardrails, and its reads below. Then take the smallest action that advances the outcome inside the boundaries. Update progress or mark done only with concrete evidence.`
+    ? `You have a focused Task on lane "${lane}": ${task.id}. Read the Task, its guardrails, pinned findings, and reads below. Close it with \`skeinn task close ${task.id} --evidence "<proof>"\` (or \`--stdin\` for per-criterion mapping).`
     : next
-      ? `No active Task. The next executable Task is ${next.id}. Start it with \`skeinn task start ${next.id}\` if the project is build_ready, or run \`skeinn project ready\` if not. If the next Task is wrong, repair the Work Map first.`
+      ? `No focused Task on lane "${lane}". The next executable Task is ${next.id}. Focus it with \`skeinn task focus ${next.id}\` (or close directly with \`skeinn task close ${next.id}\`).`
       : state.project.status === 'complete'
         ? 'All Tasks are done. Run \`skeinn check\` to verify health. If new work arises, record the decision and update the Work Map.'
         : state.project.status === 'shaping'
@@ -1651,29 +1858,48 @@ export function compileContext(options = {}, root = findRoot()) {
     : state.capability_exemption?.reason
       ? `exempted (${state.capability_exemption.reason})`
       : 'none';
-  const recentDoneTasks = silentDriftAlert(state, taskStore.tasks);
-  const silentDriftLine = recentDoneTasks.length >= SILENT_DRIFT_TASK_THRESHOLD
-    ? `- Silent-drift watch: ${recentDoneTasks.length} delivery tasks since the last clean Keeper review — consider \`skeinn keeper checkpoint prompt\`\n`
-    : '';
-  const statusBlock = `## Current Skeinn state and recommended action\n\n- Project status: ${state.project.status}\n- Active task: ${summary.active || 'none'}\n- Work map: ${summary.total} total, ${summary.open} open, ${summary.done} done, ${summary.blocked} blocked\n${blockedLine}- Design documents: ${designs.length}\n- Capability files: ${capStatusLine}\n- Keeper status: ${state.keeper.status}\n${silentDriftLine}- Clarification round: ${clarify.active ? `OPEN — ${clarify.reason} (${clarify.rounds.length} recorded)` : 'none'}\n\n**Recommended next action:** ${recommendation}\n\nThis is a recommendation, not a script. Use your judgment; if you choose differently, record the reason in \`.skeinn/DECISIONS.md\` or the active Task evidence.${options.keeper || options.full ? '' : '\n\nNeed the full runtime protocol (first entry or after a context reset)? Run skeinn context --full.'}`;
+  const dirtyDesigns = dirtyDesignDocsInHorizon(paths, state, taskStore.tasks);
+  const reviewWindow = analyzeReviewWindow(paths.root, state.keeper, taskStore.tasks, { dirtyDesignDocs: dirtyDesigns });
+  const recentDone = completedDeliveryTasksSinceLastReview(state, taskStore.tasks);
+  const sentinelReasons = [];
+  if (state.keeper.launch_completed && recentDone.length >= 5) sentinelReasons.push(`${recentDone.length} delivery tasks closed since last clean review`);
+  if (reviewWindow.level === 'heavy') sentinelReasons.push(...reviewWindow.reasons);
+  const anchorShort = reviewWindow.anchor ? reviewWindow.anchor.slice(0, 7) : 'unanchored';
+  const reviewWindowLine = reviewWindow.git
+    ? `- Review window: ${reviewWindow.files.length} files / ${reviewWindow.lines_changed} lines since ${anchorShort} (${reviewWindow.level}, anchor: ${reviewWindow.anchor_status})`
+    : `- Review window: non-git workspace (${reviewWindow.level})`;
+  const sentinelLine = sentinelReasons.length
+    ? `- Sentinel: CHECKPOINT RECOMMENDED (${sentinelReasons.join('; ')}) — run \`skeinn keeper prompt --checkpoint\` `
+    : '- Sentinel: ok';
+  const activeDisplay = Object.keys(summary.active_by_lane || {}).length
+    ? Object.entries(summary.active_by_lane).map(([l, tid]) => `${tid} (lane: ${l})`).join(', ')
+    : 'none';
+  const statusBlock = `## Current Skeinn state and recommended action\n\n- State source: ${paths.skeinn} (${paths.state_mode}) | Repo: ${paths.root} (lane: ${lane})\n- Project status: ${state.project.status}\n- Focused task(s): ${activeDisplay}\n- Work map: ${summary.total} total, ${summary.open} open, ${summary.done} done, ${summary.blocked} blocked\n${blockedLine}- Design documents: ${designs.length}\n- Capability files: ${capStatusLine}\n- Keeper status: ${state.keeper.status}\n${reviewWindowLine}\n${sentinelLine}\n- Clarification round: ${clarify.active ? `OPEN — ${clarify.reason} (${clarify.rounds.length} recorded)` : 'none'}\n\n**Recommended next action:** ${recommendation}\n\nThis is a recommendation, not a script. Use your judgment; if you choose differently, record the reason in \`.skeinn/DECISIONS.md\` or Task evidence.${options.keeper || options.full ? '' : '\n\nNeed the full runtime protocol (first entry or after a context reset)? Run skeinn context --full.'}`;
   const blocks = [statusBlock];
   if (options.full || options.keeper) blocks.push(agentProtocol({ humanChannel: options.humanChannel || 'available' }));
   blocks.push(shapingContext({ state, taskSummary: summary, capabilityNames: capabilityStates, designNames: designs, forKeeper: Boolean(options.keeper) }));
   if (['passed', 'passed_with_advisories'].includes(state.keeper.status) && state.keeper.attempts.at(-1)?.review?.mode !== 'independent') {
-    blocks.splice(1, 0, 'WARNING: The recorded Keeper pass has no independent review provenance. It is a legacy/unverified pass, not verified readiness. Prepare a fresh handoff before relying on it; see `skeinn review --help`.');
+    blocks.splice(1, 0, 'WARNING: The recorded Keeper pass has no independent review provenance. Obtain a fresh handoff before relying on it; see `skeinn keeper --help`.');
   }
-  blocks.push(`## Project whole (${normalizeRef(paths, paths.project)})\n\n${readFileSync(paths.project, 'utf8')}`);
-  if (existsSync(paths.structure)) blocks.push(`## Project structure (${normalizeRef(paths, paths.structure)})\n\n${readFileSync(paths.structure, 'utf8')}`);
+  const injectWholeDocs = options.full || options.keeper || options.checkpoint || state.project.status === 'shaping' || !task;
+  if (injectWholeDocs) {
+    blocks.push(`## Project whole (${normalizeRef(paths, paths.project)})\n\n${readFileSync(paths.project, 'utf8')}`);
+    if (existsSync(paths.structure)) blocks.push(`## Project structure (${normalizeRef(paths, paths.structure)})\n\n${readFileSync(paths.structure, 'utf8')}`);
+  } else {
+    blocks.push(`## Project reference pointers (omitted in lean mode; pass --full to expand)\n\n- Project whole: .skeinn/PROJECT.md\n- Project structure: .skeinn/STRUCTURE.md`);
+  }
   if (options.checkpoint) {
     const currentDigests = artifactDigests(paths, taskStore.tasks, state);
     const horizon = activeHorizon(taskStore.tasks, paths, 2);
     const dirty = computeDirtyArtifacts(currentDigests, state.keeper.reviewed_digests, horizon.artifacts);
     const openFindings = state.keeper.findings.filter((f) => f.status === 'open');
-    const recentDone = deliveryTasksDoneSinceCleanReview(state, taskStore.tasks);
-    blocks.unshift(checkpointProtocol({ milestone: 'in-flight', dirtyArtifacts: dirty, openFindings, recentDoneTasks: recentDone.map((t) => ({ id: t.id, title: t.title, implements: t.implements || '', touches: t.touches || [] })), preparedDigest: overallDigest(currentDigests) }));
+    blocks.unshift(checkpointProtocol({ milestone: 'in-flight', dirtyArtifacts: dirty, openFindings, preparedDigest: overallDigest(currentDigests) }));
     blocks.push(`## Decision history (${normalizeRef(paths, paths.decisions)})\n\n${readFileSync(paths.decisions, 'utf8')}`);
+    blocks.push(`## Unreviewed Git Review Window (Reality Plane)\n\n- Anchor: ${reviewWindow.anchor || 'none'} (status: ${reviewWindow.anchor_status})\n- Triage level: ${reviewWindow.level}${reviewWindow.reasons.length ? ` (${reviewWindow.reasons.join('; ')})` : ''}\n- Lines changed: ${reviewWindow.lines_changed}\n- Shared surface hits: ${reviewWindow.shared_hits.length ? reviewWindow.shared_hits.join(', ') : 'none'}\n- Changed files (${reviewWindow.files.length}):\n${reviewWindow.files.length ? reviewWindow.files.map((f) => `  - ${f}`).join('\n') : '  - none'}`);
+    if (recentDone.length) {
+      blocks.push(`## Recently closed delivery Tasks since last clean review (${recentDone.length})\n\n${recentDone.map((t) => `- ${t.id}: ${t.title} (actual_touches: ${(t.actual_touches || []).join(', ') || 'none'})`).join('\n')}`);
+    }
     blocks.push(`## Dirty / newly-entering horizon artifacts (${dirty.length})\n\n${dirty.length ? dirty.map((k) => `- ${k}`).join('\n') : '- none'}`);
-    blocks.push(`## Delivery Tasks completed since last clean review (${recentDone.length})\n\n${recentDone.length ? recentDone.map((t) => `- ${t.id} — ${t.title}\n  implements: ${t.implements || 'n/a'}\n  touches: ${(t.touches || []).join(', ')}`).join('\n') : '- none'}`);
     for (const key of dirty) {
       if (key.startsWith('.skeinn/design/')) blocks.push(`## Design document (dirty): ${basename(key)}\n\n${getDesign(basename(key), root)}`);
       else if (key.startsWith('.skeinn/capabilities/')) blocks.push(`## Capability file (dirty): ${basename(key)}\n\n${getCapability(basename(key), root)}`);
@@ -1814,8 +2040,9 @@ export function checkProject(root = findRoot()) {
       const target = ['active', 'done'].includes(task.status) ? errors : warnings;
       target.push(...classificationFindings.map((finding) => `${task.id} ${finding}`));
       if (task.status === 'done') {
-        const missingOutputs = missingTaskOutputs(task, paths);
-        errors.push(...missingOutputs.map((output) => `${task.id} declared output does not exist: ${output}`));
+        if (Array.isArray(task.lock_violations) && task.lock_violations.length) {
+          warnings.push(`${task.id} actual_touches exceeded declared locks: ${task.lock_violations.join(', ')}`);
+        }
         const staleDeps = task.depends_on.filter((depId) => taskById.get(depId)?.status !== 'done');
         if (staleDeps.length) {
           warnings.push(`${task.id} is done but upstream dependency (${staleDeps.join(', ')}) is no longer done — needs_recheck (reopen if prior evidence is invalidated)`);
@@ -1872,25 +2099,69 @@ export function checkProject(root = findRoot()) {
     }
   }
   const latestKeeper = state.keeper.attempts.at(-1);
-  if (['passed', 'passed_with_advisories'].includes(state.keeper.status) && latestKeeper && latestKeeper.review?.mode !== 'independent') errors.push('Keeper pass has no independently attested review provenance; obtain a fresh review (skeinn review --help) or record skeinn keeper skip --reason <limitation>');
+  if (['passed', 'passed_with_advisories'].includes(state.keeper.status) && latestKeeper && latestKeeper.review?.mode !== 'independent') errors.push('Keeper pass has no independently attested review provenance; obtain a fresh review (skeinn keeper --help) or record skeinn keeper skip --reason <limitation>');
   const latestCheckpoint = state.keeper.checkpoints.at(-1);
   if (latestCheckpoint && latestCheckpoint.verdict === 'drift_detected') {
     warnings.push(`Latest in-flight checkpoint (${latestCheckpoint.id}) detected drift: ${latestCheckpoint.summary}`);
+  }
+
+  // AGENTS.md v2 -> v3 migration check
+  const agentsPath = join(paths.root, 'AGENTS.md');
+  if (existsSync(agentsPath)) {
+    const agentsContent = readFileSync(agentsPath, 'utf8');
+    if (agentsContent.includes('<!-- skeinn:v2 -->') && !agentsContent.includes('<!-- skeinn:v3 -->')) {
+      warnings.push('AGENTS.md anchor is v2; run skeinn init --refresh-agents to update to v3.0 commands');
+    }
+  }
+
+  // Orthogonal 3-Sentinel Checks (silent-drift count + physical review window + stale active task)
+  const dirtyDesigns = dirtyDesignDocsInHorizon(paths, state, taskStore.tasks);
+  const reviewWindow = analyzeReviewWindow(paths.root, state.keeper, taskStore.tasks, { dirtyDesignDocs: dirtyDesigns });
+  const recentDone = completedDeliveryTasksSinceLastReview(state, taskStore.tasks);
+  const sentinels = [];
+
+  if (state.keeper.launch_completed && recentDone.length >= 5) {
+    const msg = `Silent-drift sentinel: ${recentDone.length} delivery task(s) closed since last clean review — run skeinn keeper prompt --checkpoint`;
+    warnings.push(msg);
+    sentinels.push(msg);
+  }
+  if (reviewWindow.anchor_status === 'lost') {
+    const msg = `Review anchor lost (${reviewWindow.anchor?.slice(0, 7) || 'unknown'} unreachable) — run skeinn keeper prompt --checkpoint`;
+    warnings.push(msg);
+    sentinels.push(msg);
+  } else if (state.keeper.launch_completed && reviewWindow.level === 'heavy') {
+    const msg = `Physical review window is heavy (${reviewWindow.reasons.join('; ')}) — run skeinn keeper prompt --checkpoint`;
+    warnings.push(msg);
+    sentinels.push(msg);
+  }
+  const staleCutoffMs = Date.now() - 24 * 60 * 60 * 1000;
+  for (const activeTask of taskStore.tasks.filter((t) => t.status === 'active')) {
+    const updatedMs = Date.parse(activeTask.updated_at || '');
+    if (updatedMs && updatedMs < staleCutoffMs && reviewWindow.files.length > 0) {
+      const msg = `Stale active Task ${activeTask.id} (lane: ${activeTask.lane || 'default'}) has unreviewed worktree drift (${reviewWindow.files.length} files)`;
+      warnings.push(msg);
+      sentinels.push(msg);
+    }
   }
   if (state.keeper.launch_completed && state.project.status === 'building') {
     const currentDigests = artifactDigests(paths, taskStore.tasks, state);
     const horizon = activeHorizon(taskStore.tasks, paths, 2);
     const dirty = computeDirtyArtifacts(currentDigests, state.keeper.reviewed_digests, horizon.artifacts);
-    if (dirty.length) warnings.push(`In-flight horizon has ${dirty.length} unreviewed/changed artifact(s): ${dirty.join(', ')} — consider skeinn keeper checkpoint prompt`);
+    if (dirty.length) warnings.push(`In-flight horizon has ${dirty.length} unreviewed/changed artifact(s): ${dirty.join(', ')} — consider skeinn keeper prompt --checkpoint`);
   }
-  const recentDone = silentDriftAlert(state, taskStore.tasks);
-  if (recentDone.length >= SILENT_DRIFT_TASK_THRESHOLD) {
-    warnings.push(`${recentDone.length} delivery task(s) completed since the last clean Keeper review/checkpoint (${recentDone.map((t) => t.id).join(', ')}) — run skeinn keeper checkpoint prompt to guard against silent spec-to-code drift.`);
-  }
+
   const coverage = checkDeliverableCoverage(root);
   if (coverage.uncovered > 0) warnings.push(`Uncovered deliverables: ${coverage.uncovered_items.map((item) => item.slug).join(', ')}`);
   if (coverage.covered > coverage.delivered) warnings.push(`${coverage.covered - coverage.delivered} deliverable(s) are covered only by Tasks not yet done`);
-  return { healthy: errors.length === 0, errors, warnings, summary: taskSummary(taskStore.tasks), deliverable_coverage: { total: coverage.total, planned: coverage.covered, delivered: coverage.delivered, uncovered: coverage.uncovered } };
+  return {
+    healthy: errors.length === 0,
+    errors,
+    warnings,
+    summary: taskSummary(taskStore.tasks),
+    review_window: reviewWindow,
+    sentinels,
+    deliverable_coverage: { total: coverage.total, planned: coverage.covered, delivered: coverage.delivered, uncovered: coverage.uncovered },
+  };
 }
 
 export function scaffoldEval(payload, root = findRoot()) {
