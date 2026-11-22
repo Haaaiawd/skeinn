@@ -2150,6 +2150,45 @@ export function checkProject(root = findRoot()) {
     if (dirty.length) warnings.push(`In-flight horizon has ${dirty.length} unreviewed/changed artifact(s): ${dirty.join(', ')} — consider skeinn keeper prompt --checkpoint`);
   }
 
+  // Ledger-integrity sentinels: the .skeinn/ ledger is plain JSON and can be edited directly.
+  // These checks cannot prevent ledger forgery, but they make the common fingerprints loud.
+  for (const task of taskStore.tasks) {
+    if (task.status === 'done' && !task.completed_at) {
+      const msg = `${task.id} is marked done without close metadata (no completed_at) — possible direct ledger edit; audit .skeinn/tasks.json or skeinn task reopen`;
+      warnings.push(msg);
+      sentinels.push(msg);
+    }
+  }
+  const fndNums = state.keeper.findings
+    .map((f) => /^FND-(\d+)$/.exec(f.id || '')?.[1])
+    .filter(Boolean)
+    .map(Number);
+  const recordedFindings = state.keeper.checkpoints.reduce((sum, c) => sum + (c.findings_added || 0), 0);
+  if (fndNums.length && Math.max(...fndNums) > fndNums.length) {
+    const msg = `Findings ledger has sequence gaps (max FND-${String(Math.max(...fndNums)).padStart(3, '0')}, ${fndNums.length} entries) — possible direct ledger edit`;
+    warnings.push(msg);
+    sentinels.push(msg);
+  } else if (!fndNums.length && recordedFindings > 0) {
+    const msg = `Findings ledger is empty but ${recordedFindings} finding(s) were recorded in checkpoints — possible direct ledger edit`;
+    warnings.push(msg);
+    sentinels.push(msg);
+  }
+  const lastResetAt = (state.decision_events || [])
+    .filter((e) => (e.summary || '').includes('Keeper relaunch reset'))
+    .map((e) => e.at || '')
+    .sort()
+    .at(-1) || '';
+  if (lastResetAt && !state.keeper.launch_completed) {
+    const closedDuringDisarm = taskStore.tasks.filter(
+      (t) => t.status === 'done' && (t.completed_at || '') > lastResetAt,
+    );
+    if (closedDuringDisarm.length) {
+      const msg = `${closedDuringDisarm.length} task(s) closed while the heavy-review gate was disarmed after a keeper reset (${closedDuringDisarm.map((t) => t.id).join(', ')}) — Launch has not been re-run`;
+      warnings.push(msg);
+      sentinels.push(msg);
+    }
+  }
+
   const coverage = checkDeliverableCoverage(root);
   if (coverage.uncovered > 0) warnings.push(`Uncovered deliverables: ${coverage.uncovered_items.map((item) => item.slug).join(', ')}`);
   if (coverage.covered > coverage.delivered) warnings.push(`${coverage.covered - coverage.delivered} deliverable(s) are covered only by Tasks not yet done`);

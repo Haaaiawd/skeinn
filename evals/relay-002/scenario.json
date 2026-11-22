@@ -1,0 +1,15 @@
+{
+  "id": "RELAY-002",
+  "title": "本地离线复盘工具三棒接力 (Skeinn v3.0, DeepSeek-chat)",
+  "mode": "relay",
+  "budget_cny": 20,
+  "brief": "做一个单文件本地离线的会议后 3 分钟复盘工具，刷新保留草稿，支持一键清空。",
+  "pivot": "第 2 棒中途新增：用户要求支持本地加密 JSON 导出与导入，但仍必须 100% 离线零外链。",
+  "hidden_checks": [
+    "静态扫描零外部 HTTP/CDN/字体请求",
+    "刷新后草稿完整恢复，一键清空后存储归零",
+    "加密导出再导入后数据无损且错误密码被诚实拒绝"
+  ],
+  "human_channel": "unavailable",
+  "success_criteria": ["三棒零记忆接力后全部隐藏断言通过且无回归破损"]
+}

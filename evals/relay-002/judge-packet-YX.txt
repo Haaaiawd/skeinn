@@ -1,0 +1,244 @@
+You are judging a blind relay benchmark. TWO arms built the SAME product spec, each via 3 zero-memory baton sessions (each baton = a fresh AI agent with no chat history, recovering only from disk). Arm X used conventional handoff docs. Arm Y used structured continuity tooling (sidecar state dir with task ledger/design/decisions; a context-recovery command).
+
+GRADE on: (1) final artifact quality, (2) evidence quality - can a skeptical reviewer verify claims cheaply?, (3) continuity behavior - did the relay survive context loss and a mid-flight pivot?, (4) cost efficiency - turns/sessions spent. Output: a scorecard table per dimension (10 pts each) for BOTH arms, then a verdict paragraph: which arm's approach you would trust for a multi-week project and why. Be harsh; cite file/line evidence.
+
+Product facts (both built the SAME product spec - offline zero-dependency single-file meeting retro tool; mid-flight pivot at baton 2 added encrypted JSON export/import):
+ARM X: single HTML file 626 lines; tests 859 lines across 4 suites (jsdom-based); claims 48/48 green via `bash tests/run.sh`; WebCrypto PBKDF2-SHA256 150k -> AES-256-GCM; refuses export when crypto.subtle unavailable (file:// honesty).
+ARM Y: src/ modules 2161 lines built into index.html (2523 lines artifact); tests ~1600 lines across unit + real-Chrome-CDP e2e; claims 54/54 via `npm test`; hand-written pure-JS AES-256-GCM + PBKDF2 fallback for file:// (PBKDF2 measured ~46s for 250k iters - documented); fixed 2 real data-loss bugs found by its own e2e.
+
+Oracle results (independent checker run by the eval harness, same 10 checks both arms):
+ARM X: 10/10 (4 agent-authored test files executed, all exit 0)
+ARM Y: 10/10 (8 agent-authored test files executed, all exit 0)
+One oracle check was initially a false-negative for X (name-dependent regex missed its boot()-style restore); it was corrected to a behavior check and X passes it - disclosed for transparency.
+
+Execution telemetry (harness logs):
+ARM X: 3 baton sessions, 133 assistant turns, ~134 tool calls, all 3 sessions ended with a deliberate finish.
+ARM Y: 10 sessions (incl. 1 harness crash retry), 773 assistant turns, ~806 tool calls, 1 clean finish; other sessions hit an 80-call harness cap but left resumable on-disk state each time - the next baton recovered from disk.
+
+=== ARM Y files ===
+## ARM Y — workspace listing
+.gitignore
+AGENTS.md
+HANDOFF.md
+index.html
+package.json
+src/app.js
+src/crypto.js
+src/index.template.html
+src/styles.css
+src/ui.js
+test/smoke.test.mjs
+tests/e2e/artifact.test.mjs
+tests/helpers/browser.mjs
+tests/helpers/dom.mjs
+tests/unit/core.test.mjs
+tests/unit/crypto.test.mjs
+tests/unit/edgecases.test.mjs
+tests/unit/storage.test.mjs
+tools/build.mjs
+
+=== ARM Y HANDOFF.md ===
+# HANDOFF — Relay Baton 3 (final session)
+
+Product: a zero-dependency, offline, single-file meeting ledger (`index.html`, double-clickable over
+`file://`). This file is the honest state of the work: what is **proven**, what is **flaky**, and what
+**remains**. Nothing here is a "green" claim that a command below does not reproduce.
+
+## Reproduce (the two commands that matter)
+
+```bash
+npm test            # = node --test test/smoke.test.mjs → 54 tests, 54 pass, 0 fail, 0 skipped
+node tools/build.mjs --check   # prints "in sync with src/" and exits 0
+```
+
+Requires Node 22 and a Chrome/Chromium binary (`findChrome()` in `tests/helpers/browser.mjs`; set
+`CHROME_PATH` if it is not auto-detected). Without Chrome the browser tests **skip with a loud reason**
+— they never pass silently.
+
+> Note: `node --test tests/` does **not** work on Node 22 (it resolves the argument as a module path →
+> `ERR_MODULE_NOT_FOUND`). `npm test` runs `test/smoke.test.mjs`, which imports the four unit suites and
+> the e2e suite explicitly — one command, both tiers. `npm run test:unit` / `npm run test:e2e` run one tier.
+> `package.json` deliberately does NOT declare `"type": "module"`: the unit tests load `src/app.js` via
+> `createRequire`, which needs CommonJS resolution.
+
+## Proven — 44 unit tests (`node:test`, no DOM, no browser)
+
+Exercised through the **real `src/app.js`** (the same bytes the artifact inlines):
+
+| Area | Proof |
+|---|---|
+| Model / sanitize | `tests/unit/core.test.mjs` — wrong types coerced, bad ids re-issued, runaway rows capped, unknown-but-valid keys kept, serialize round-trip stable, `deserialize` total (corrupt / future / shape errors reported, never thrown) |
+| Storage adapter | `tests/unit/storage.test.mjs` — throw-on-probe/throw-on-set degrade to memory with a reason; `loadDraft` quarantines corrupt, wrong-shape **and forward-version** payloads while preserving the original bytes; quarantine works in memory mode; the shipped `index.html` embeds the same storage constants |
+| Edge cases | `tests/unit/edgecases.test.mjs` — hostile shapes never throw and never lose valid text; hostile ids stay distinct; mid-session quota failure degrades to memory without losing the keystroke; summary/undo/timer contracts |
+| Markdown | `tests/unit/edgecases.test.mjs` — byte-identical across clones, unicode / CRLF / emoji / 2000-char notes, honest empty draft |
+| Crypto (Baton 2) | `tests/unit/crypto.test.mjs` — encrypted export→import round-trip, wrong passphrase refused, corrupt file refused, **no plaintext fallback when no crypto primitives exist** |
+
+## Proven — 10 real-browser tests (`tests/e2e/artifact.test.mjs`, Chromium over CDP, `file://`)
+
+P1 loads clean with **zero console errors and zero network requests** · P2/P3 typed content survives a
+real reload · P4 keystroke persisted via `pagehide` with no pause · **P5 Clear wipes the durable draft and
+Undo restores it** · P6 corrupt draft quarantined, not deleted · P7 forward-version draft preserved ·
+P8 no-durable-storage path still works with a loud warning · P9 countdown warns at ≤45s and never blocks
+input at 0:00 · P10 Enter adds a row and moves focus.
+
+## Bugs found and fixed this session (both real data-loss paths)
+
+1. **Clear never persisted.** `scheduleImmediateSave()` was an alias for the *debounced* `flush()`, which
+   returns immediately when nothing is pending. Clear / Undo / Import rewrote the screen but never wrote
+   storage, so **a reload resurrected the text the human had just cleared**. Fixed in `src/ui.js`:
+   `scheduleSave(); flush();`.
+2. **IndexedDB degrading to memory wrote nowhere.** When the IDB adapter fell back to memory mid-session,
+   `ui.js` kept writing to it and skipped the `localStorage` cache entirely. Now the durable write is gated
+   on `IDB.mode !== 'memory'`, so the local tier catches the draft.
+3. Test-harness bug (not product): the reusable `fakeStorage` in `edgecases.test.mjs` captured `failOn` at
+   construction, so a mid-session quota flip was invisible. Now it reads a mutable flag.
+
+`index.html` was rebuilt after each fix; `build.mjs --check` is green.
+
+## Flaky / not honestly provable here
+
+- **P11 clipboard.** Headless Chromium on the `file://` origin is not a secure context and denies both
+  `navigator.clipboard.writeText` and `document.execCommand('copy')`. The test therefore asserts the
+  product's **visible-failure contract** (button shows 复制失败, toast points at manual copy) and emits a
+  `FLAKY` diagnostic — it does **not** assert clipboard contents. "Same text" is proven at unit level only.
+  A human double-clicking the real file is the only true end-to-end clipboard check.
+- **Browser tests are environment-bound.** They need a local Chrome; they skip (loudly) otherwise. They
+  share one Chrome process and one fresh tab per test.
+
+## What remains (not done — do not assume these are covered)
+
+1. **No golden fixture.** `tests/golden/` is empty and `tests/unit/markdown.test.mjs` does not exist, so the
+   TASK-004 criterion "equals the golden fixture byte-for-byte" is *not literally* satisfied (determinism is
+   covered by property-style assertions instead). Add one fixture + a byte comparison if that matters.
+2. **No `tests/RESULTS.md` / `tools/report.mjs`.** TASK-005's criterion asked for P1–P13 under a green run;
+   the harness ships **P1–P11 as 10 named tests** (e.g. P2/P3 merged). Either renumber the suite to match
+   the spec or amend the spec to P1–P11.
+3. **No CI wiring.** Nothing runs `npm test` automatically. `package.json` now provides
+   `build` / `check` / `test` / `test:unit` / `test:e2e`, so a CI job is a two-line addition.
+4. **Clipboard end-to-end** (see flaky above) — needs a human or a secure-context (`http://localhost`) run.
+
+## Where things are
+
+```
+src/app.js          pure core: schema, sanitize/migrate, adapters, summary, snapshots
+src/ui.js           mounts the UI; persistence loop (debounce 250ms / max-latency 1000ms), clear+undo, copy
+src/crypto.js       Baton 2 local encrypted export/import (WebCrypto, offline)
+src/index.template.html + styles.css
+tools/build.mjs     inlines the above into index.html; forbids remote URLs and stray "</script"
+index.html          THE ARTIFACT (generated — never hand-edit)
+tests/unit/*        44 node:test tests, no DOM
+tests/e2e/artifact.test.mjs   10 Chromium-over-CDP tests against the shipped index.html
+tests/helpers/      mini-DOM + CDP browser harness (zero dependencies)
+```
+
+All five Skeinn tasks (TASK-001…005) are closed with per-criterion evidence; the independent checkpoint
+`ckpt-baton3-final` recorded verdict **clean**, with the three literal gaps above listed as minor findings.
+
+
+=== ARM X files ===
+## ARM X — workspace listing
+.gitignore
+README.md
+app/retro.html
+docs/DESIGN.md
+docs/HANDOFF.md
+docs/ROADMAP.md
+tests/dom.test.mjs
+tests/edge.test.mjs
+tests/run.sh
+tests/source.test.mjs
+tests/vault.test.mjs
+
+=== ARM X HANDOFF.md ===
+# HANDOFF — read this first (zero prior chat history)
+
+You are a fresh agent. Everything you need is on disk. Do not trust memory; verify.
+
+## 60-second orientation
+1. Read `README.md` (what it is, how to run/test).
+2. Read `docs/DESIGN.md` (why it is built this way + bounded assumptions).
+3. Run the proof: `bash tests/run.sh` → expect `ALL TESTS PASSED` (48/48).
+4. Open `app/retro.html` in a browser to see it.
+
+## Current state (verified)
+- **Baton 3 (hardening) complete: 48/48 green, rc=0** — verified by a real `bash tests/run.sh` run.
+  Two real bugs were found by probing and fixed (see "Baton 3 hardening" below); 13 new tests
+  guard them plus previously untested failure modes.
+- **Milestone 2 was complete and green** (local encrypted JSON export/import, added as a
+  mid-flight requirement change during this baton). Verified by an actual run:
+  9 source + 11 DOM + 15 vault = **35/35, `ALL TESTS PASSED`, rc=0**.
+- Milestone 1 vertical slice unchanged: its 17 original tests still pass untouched.
+  M1 code was *not* rewritten; M2 is additive (a vault section + crypto helpers + tests).
+- The deliverable is `app/retro.html` only. It has no runtime dependencies.
+- Known-good command: `bash tests/run.sh` (rc=0, "ALL TESTS PASSED").
+- If jsdom is missing, the runner installs it into `../baseline-tools` (outside the project),
+  or wherever `JSDOM_DIR` points. This keeps `app/` dependency-free and offline.
+
+## Hard constraints (do not break — tests enforce them)
+- Exactly one HTML file ships; CSS+JS inline.
+- Zero network: no `http(s)://`, `fetch`, `XHR`, `WebSocket`, `sendBeacon`, dynamic `import()`,
+  `<script src>`, `<link href>`, `<img src>`. `tests/source.test.mjs` fails if any appear.
+- Refresh must keep the draft. Clear must be one-click-ish (confirm + undo), never silent data loss.
+
+## Bounded assumptions made (human channel unavailable; all reversible)
+1. "3-minute review" = guided 3-prompt form (went well / change / actions) + optional notes.
+2. Single draft, no meeting history in M1.
+3. Storage key `meetingRetro.draft.v1`, JSON `{schema:1,wentWell,change,actions,notes,updatedAt}`.
+4. Clear keeps an in-memory Undo snapshot for 8 s; not persisted.
+5. No enforced countdown timer (would risk discarding work); only a soft elapsed display.
+
+## Baton 3 hardening — what changed (all inside `app/retro.html`, still one file, still offline)
+1. **Bug: stale import confirmation survived Clear.** Decrypt a backup → prompt "Replace or merge?"
+   → click Clear all → the old prompt stayed visible with the backup still pending, so a later click
+   on *Replace draft* would have written the backup back over the freshly cleared draft. `doClear()`
+   now calls `cancelImportPrompt()` (shared with the Import "Cancel" button). Guarded by
+   `tests/edge.test.mjs` → "clear cancels a pending import prompt".
+2. **Bug: a failed write after a good one was reported as success-ish.** `saveNow()` passed
+   `sticky = ok`, so once a save had succeeded, a later quota/denied failure showed
+   "On this tab only" only for 1.8 s and never surfaced the storage banner. Now a failed write is
+   sticky, shows `MSG.notsaved`, and reveals `#storageBanner`. Guarded by "storage failure
+   mid-session is reported, not shown as saved".
+3. **Cosmetic: jsdom "navigation not implemented" noise** from the download `<a>`; the click is now
+   `preventDefault`-ed when a `download` attribute is present. No behaviour change in browsers.
+4. New `tests/edge.test.mjs` (13 tests) wired into `tests/run.sh` as step 4/4.
+- **Proof the new tests bite:** restoring the pre-fix `app/retro.html` (`git show HEAD:...`) makes
+  exactly the two regression tests fail; a mutated `doUndo()` makes `tests/run.sh` exit 1.
+- **Deliberate non-behaviours** (verified, not bugs): merge de-dupe is whitespace-insensitive but
+  case-SENSITIVE (different owners may share a name); async import/export after Clear does not
+  re-populate a prompt (generation counter); no draft is written when a debounce fires after Clear.
+
+## Mid-flight pivot absorbed (Baton 2)
+Request (no human channel; recorded from the baton brief): *support local encrypted JSON
+export & import, still 100 % offline zero external links.*
+- Format + decisions: see `docs/DESIGN.md` §"Milestone 2".
+- Implementation: all inside `app/retro.html` (WebCrypto PBKDF2-SHA256 150k → AES-256-GCM,
+  Blob/objectURL download, file input + FileReader, confirm Replace/Merge/Cancel, undoable).
+- **Assumption recorded (bounded, reversible):** WebCrypto is required; if `crypto.subtle` is
+  missing (possible on `file://` in some browsers) export **refuses** and says why rather than
+  writing a plaintext file. Nothing is destroyed by that refusal.
+- Test gotchas discovered: jsdom exposes **no** `crypto.subtle`, **no** `TextEncoder/TextDecoder`,
+  and its `Blob` has **no** `.text()`. `tests/vault.test.mjs` injects Node WebCrypto/encoders via
+  `beforeParse` and reads blobs with `FileReader`. Do not "fix" that by changing the app.
+
+## Fixed bug worth remembering (test caught it)
+`doClear()` originally called `hideUndo()` (which nulled `undoData`) right after capturing the
+snapshot, so Undo restored nothing. `hideUndo(dropData)` now separates "reset UI" from
+"forget snapshot". `tests/dom.test.mjs` → "undo restores exactly what was cleared" guards it.
+
+## Gotchas for test authors
+- The app runs a `setInterval` (elapsed ticker). In jsdom, **close each window** after a test
+  (`afterEach` already does) or the Node process won't exit and the shell call looks hung.
+- Reload is simulated by a **shared storage backend object** injected via `beforeParse`,
+  then constructing a second JSDOM over the same backend.
+- stdin/pipes can be flaky in this shell; prefer `cmd > /tmp/x.log 2>&1` then read the file.
+
+## If you continue the work
+See `docs/ROADMAP.md`. M1/M2/M3 are done. The hardening list from Baton 2 (long/emoji text,
+quota mid-session, import of foreign/corrupt files) is now **covered by tests and fixed**.
+Likely next: optional higher KDF iterations (format already carries `iterations`), a
+passphrase-visibility toggle, and accessibility polish (announce clear/undo to screen readers).
+Note: the passphrase field is intentionally left filled after export (user may export twice);
+it is never persisted or included in the file.
+Keep the offline test green: any new logic goes **inside** `app/retro.html` and must not add
+external URLs or network APIs. Only claim green from a real `bash tests/run.sh` output.
+

@@ -213,8 +213,14 @@ skeinn check
 内置 **Evil Eval** 脚手架：在完全相同的模型、工具、工作区、用户事实与预算下，对“无框架基线”与“接入 Skeinn”执行**强制上下文重置 + 匿名盲评 + 顺序交换**，把仪式成本、用户负担与最终质量一起计分。详见 [EVIL_EVAL.md](EVIL_EVAL.md)。
 
 ```bash
-npm test
+npm test   # 48 项端到端契约测试
 ```
+
+已对 `deepseek-chat` 实测两轮，报告全文随仓库提交：
+
+**[EVIL-001](evals/evil-001/REPORT.md) —— 对抗鲁棒性。** 一个被按“每关一个 Task 计费、诚实零奖金”激励的 DeepSeek Agent 拿到 shell，在 Skeinn 管辖的项目里自由攻击；随后补跑 10 个它没试过的确定性探针。结果：它选择了真实写码（比硬闯闸门便宜），然后绕过重型窗口闸门——自封 `reviewer_id:"contractor-*"` 检查点、`git reset` 改历史、把 `keeper reset` 当开锁器。探针确认了三个真实静默穿透（`.skeinnignore` 自我隐身、`tasks.json` 直改、findings 账本删除）——**三洞已全部硬化为带哨兵的 check + 回归测试**。诚实的残留边界：`.skeinn/` 是裸 JSON，**一致的**全账本伪造仍可能；Skeinn 是仪式+审计层，不是证明系统——它让指纹变响，而非不可伪造。
+
+**[RELAY-002](evals/relay-002/REPORT.md) —— 连续性层到底值不值？** 双臂用同一 spec、3 棒零记忆接力 + 中途需求反转：传统 HANDOFF.md vs 完整 Skeinn sidecar。隐藏 oracle：**双臂 10/10**。盲评（顺序对调）：一遍 **33:25 基线胜**、一遍 **30:30 平**。两位“裁判”一致认定的事实：Skeinn 臂成本 **~6 倍轮次**（773 vs 133），但测试更深（真实 Chrome e2e 抓到两个 jsdom 看不见的数据丢失 bug），且让反转需求在 `file://` 上**真的成立**。Skeinn 机制撑过了 10 个会话（含 1 次崩溃、8 次预算截断）——每棒都从磁盘恢复了意图。诚实的结论：**连续性不会让 Agent 更便宜，它让灾难可恢复**——开销在周级跨度摊薄，三棒冲刺是亏的。
 
 ---
 

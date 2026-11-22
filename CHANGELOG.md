@@ -15,6 +15,20 @@
 - **Structural Guardrail**: Delivery tasks cannot `depends_on` exploratory `spike` tasks.
 - **Freeform finding scopes**: Finding `scope` fields tolerate real reviewer output — `task:` digest-key prefixes, bare Task ids, and compound `" / "` / comma-joined scopes are canonicalized at write and matched per-part at `task focus`/`close` gating and horizon checks.
 
+### Adversarial Hardening (EVIL-001)
+
+Field-tested against a live `deepseek-chat` adversary (shell access, paid-per-task brief) plus 10 deterministic probes — see `evals/evil-001/REPORT.md`. Three silent penetrations found and closed:
+
+- **`.skeinnignore` self-hiding**: ignore config can never be ignored (even by `*`), and modifying it is now a heavy-window trigger (`cli/src/git.js`).
+- **Ledger-integrity sentinels in `skeinn check`** (`cli/src/store.js`): forged `done` Tasks lacking `completed_at`, FND sequence gaps / recorded-but-empty findings ledger, and Tasks closed inside a post-`keeper reset` disarm window while `launch_completed` is still false.
+- Regression coverage: `v3.0 adversarial hardening` suite in `cli/test/run-all.js` (48/48).
+
+Residual boundary documented, not fixed: `.skeinn/` is plain JSON — a fully consistent ledger forge remains possible. Skeinn is a ceremony + audit layer; it makes fingerprints loud, not impossible.
+
+### Continuity Benchmark (RELAY-002)
+
+Dual-arm, 3-baton zero-memory relay vs conventional handoff docs on `deepseek-chat` — see `evals/relay-002/REPORT.md`. Hidden oracle 10/10 both arms; order-swapped blind judging split (33:25 baseline / 30:30 tie). Skeinn arm recovered intent from disk across 10 sessions incl. a crash and 8 budget-cap amputations, shipped real-browser e2e that caught two data-loss bugs the baseline's jsdom suite could not see — at ~6× the turn cost.
+
 ### Clean v3.0 CLI & Context Injection
 - **Zero-Ceremony Input**: All JSON commands accept `--stdin`, `--json '<json>'`, or `--json-file <path>`; `skeinn task close <id> --evidence "<proof>"` maps single-line proof across all acceptance criteria.
 - **Clean Vocabulary + Signposts**: Replaced `task start/done` -> `task focus/close`, added `task list`, unified `keeper prompt/record [--checkpoint]`, added `init --refresh-agents` (`<!-- skeinn:v3 -->`). Removed legacy aliases (`task start`, `task done`, `capability research/synthesize`, `keeper checkpoint`, `review`, `resume`, `prompts`) now exit 1 with exact migration signposts.

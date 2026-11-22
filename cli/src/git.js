@@ -79,6 +79,9 @@ export function loadIgnorePatterns(repoRoot) {
 export function shouldIgnorePath(relPath, extraPatterns = []) {
   const normalized = normalizeGitPath(relPath);
   if (!normalized) return true;
+  // The review-shaping config can never hide itself: a broadened .skeinnignore
+  // (e.g. `*`) must remain visible in the Review Window it is shrinking.
+  if (normalized === '.skeinnignore') return false;
   const base = basename(normalized);
 
   // Check explicit negation in .skeinnignore first
@@ -352,6 +355,7 @@ export function analyzeReviewWindow(repoRoot, keeperState = {}, tasks = [], { di
   const topDirs = collectTopDirs(files);
   const reasons = [];
 
+  if (files.includes('.skeinnignore')) reasons.push('review-shaping ignore config modified: .skeinnignore');
   if (files.length >= 8) reasons.push(`review window touched ${files.length} files (>= 8)`);
   if (linesChanged >= 400) reasons.push(`review window changed ${linesChanged} lines (>= 400)`);
   if (sharedHits.length) reasons.push(`shared surface touched: ${sharedHits.join(', ')}`);

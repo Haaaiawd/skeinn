@@ -1,0 +1,53 @@
+# Relay Benchmark Scorecard
+
+## Scoring
+
+### 1. Final Artifact Quality (10 pts)
+
+| Arm | Score | Evidence |
+|---|---|---|
+| **X** | **7/10** | Single file, 626 lines, zero-dep, WebCrypto PBKDF2 150k→AES-GCM. Honest refusal when `crypto.subtle` unavailable (HANDOFF "Assumption recorded"). But: M2 crypto only works where WebCrypto exists — on `file://` (the *spec's* delivery surface) some browsers deny it, so encrypted export is a non-feature on the primary path. No fallback. Artifact is one file but at 626 lines it's a tighter, narrower product. |
+| **Y** | **9/10** | 2523-line artifact built from modular `src/` (2161 lines) via `tools/build.mjs` with `--check` drift gate. Ships a **hand-written pure-JS AES-GCM + PBKDF2 fallback** so encrypted export actually works on `file://` — which is the spec's target. PBKDF2 cost is measured and disclosed (~46s/250k iters), not hidden. Found and fixed **two real data-loss bugs** via its own e2e ("Clear never persisted", "IDB→memory wrote nowhere" — HANDOFF §"Bugs found and fixed"). Deduct 1: real-Chrome e2e is env-bound (skips loudly without Chrome) and P11 clipboard is honestly marked flaky. |
+
+### 2. Evidence Quality (can a skeptic verify cheaply?)
+
+| Arm | Score | Evidence |
+|---|---|---|
+| **X** | **6/10** | One command: `bash tests/run.sh` → 48/48. Good. But: the "proof the new tests bite" is a prose claim (`git show HEAD:...` makes two tests fail) — the reviewer must reconstruct it. No build-drift gate (single file, so N/A, but also no check that tests exercise the shipped bytes vs. a copy). jsdom-only: no real-browser proof of the `file://` behavior that is the product's whole delivery surface. The oracle's initial **false-negative** on X ("boot()-style restore" name-dependent regex) is a smell — X's structure made an independent checker guess wrong. |
+| **Y** | **9/10** | HANDOFF is a model of falsifiable honesty: names the exact commands, names the Node-22 `node --test tests/` trap and why `npm test` wraps `smoke.test.mjs`, states the `"type": "module"` omission rationale, and **explicitly lists 4 things that are NOT done** (no golden fixture, no `RESULTS.md`, no CI, clipboard e2e). Real-Chrome-CDP e2e against the *shipped* `index.html`, plus `build.mjs --check` proving artifact↔src parity. That is exactly what a skeptic needs. Deduct 1: the "44 unit + 10 e2e" split means the reviewer must trust the arithmetic; and the empty `tests/golden/` is a literal spec gap it admits. |
+
+### 3. Continuity Behavior (survived context loss + mid-flight pivot?)
+
+| Arm | Score | Evidence |
+|---|---|---|
+| **X** | **8/10** | 3 batons, all 3 ended deliberately — clean relay, no crash. Pivot absorbed at baton 2 as **additive** (M1 untouched, "M2 is additive" — HANDOFF), which is the right instinct. HANDOFF carries forward gotchas (jsdom lacks `crypto.subtle`/`TextEncoder`; close windows or Node hangs) — that's real recovered state. Weak spot: state lives in prose (`docs/HANDOFF.md`, `docs/DESIGN.md`), so recovery depends on the next agent reading carefully; no machine-checkable ledger, and the oracle regex hitting the wrong restore name suggests implicit structure the next agent must reverse-engineer. |
+| **Y** | **8/10** | 10 sessions, 1 harness crash retry, and **other sessions hit the 80-call cap but "left resumable on-disk state each time — the next baton recovered from disk."** That is the benchmark's core claim proven under adversarial conditions (caps + crash), not in a clean run. The pivot to crypto fallback is disciplined (source-of-truth `src/crypto.js`, rebuilt artifact). Deduct 2: it *needed* 10 sessions and 773 turns — the relay survived, but only because the tooling caught a process that kept running out of budget; a leaner relay is a better relay. |
+
+### 4. Cost Efficiency (turns / sessions)
+
+| Arm | Score | Evidence |
+|---|---|---|
+| **X** | **9/10** | 3 sessions, 133 assistant turns, ~134 tool calls, 3 deliberate finishes. Textbook relay economics. |
+| **Y** | **4/10** | 10 sessions (incl. crash retry), 773 assistant turns, ~806 tool calls, **1 clean finish**; the rest capped at 80 calls. ~5.5× the turns and ~3× the sessions for a product that is *~4× the code* (2523 vs 626 lines) — so per-line it's ~1.4×, not catastrophic, but the wall-clock/turn cost is real and the "1 clean finish out of 10" is a bad look for a relay meant to end each baton deliberately. |
+
+## Scorecard Summary
+
+| Dimension | X | Y |
+|---|---|---|
+| Final artifact quality | 7 | **9** |
+| Evidence quality | 6 | **9** |
+| Continuity behavior | **8** | **8** |
+| Cost efficiency | **9** | 4 |
+| **Total** | **30/40** | **30/40** |
+
+## Verdict
+
+**Tie on points, but I would trust Arm Y's approach for a multi-week project — for one specific reason, not on totals.**
+
+Arm X is the efficient relay: 3 batons, 133 turns, three clean finishes, additive pivot, and an honest refusal instead of a plaintext fallback (`docs/HANDOFF.md` "Assumption recorded"). If the spec were frozen and the surface were a modern browser, X is the disciplined choice.
+
+But the product delivers over `file://`, and X's crypto is a **conditional feature** on that surface — encrypted export simply doesn't work where `crypto.subtle` is absent. Y ships a fallback that makes the pivot *actually true* on the delivery surface, and — critically — Y's own e2e caught **two real data-loss bugs** ("Clear never persisted"; "IDB→memory wrote nowhere", HANDOFF §"Bugs found and fixed") that X's jsdom suite structurally cannot see, because X never runs a real browser over the shipped file. X's "48/48 green" is honest but narrow; Y's "54/54" plus `build.mjs --check` plus a real-Chrome tier is falsifiable in more places.
+
+For a **multi-week** project, Y's evidence discipline wins: its HANDOFF explicitly lists four things that are *not done* (no golden fixture, no `RESULTS.md`, no CI, clipboard e2e) — that is the document a skeptical reviewer and the next baton both need. Y also **proved its continuity survived conditions X never faced**: an 80-call cap and a harness crash, each recovered from on-disk state. X's 3-clean-finish relay is untested against the failure that kills real multi-week relays.
+
+The cost is real and I am not waving it off: Y burned **773 turns and 10 sessions for one clean finish**. That is a process that kept running out of budget and only survived because the tooling caught it. If Y's structured state dir ("task ledger/design/decisions + context-recovery command") were tightened so batons finish deliberately like X's, it would dominate outright. As built: **X wins on cost; Y wins on what survives contact with reality; for multi-week I take Y and put X's turn budget as a hard constraint on the next relay.**

@@ -1,0 +1,39 @@
+# Blind Relay Benchmark — Scorecard
+
+## Scorecard
+
+| Dimension | ARM X | ARM Y |
+|---|---|---|
+| **1. Final artifact quality** | **7 / 10** | **8 / 10** |
+| **2. Evidence quality** | **8 / 10** | **6 / 10** |
+| **3. Continuity behavior** | **9 / 10** | **7 / 10** |
+| **4. Cost efficiency** | **9 / 10** | **4 / 10** |
+| **Total** | **33 / 40** | **25 / 40** |
+
+---
+
+### 1. Final artifact quality — X: 7, Y: 8
+
+Both satisfy the spec. X ships 626 lines in one file (`app/retro.html`), zero deps, honest WebCrypto-only export — it **refuses** rather than silently plaintext-ing on `file://` where `crypto.subtle` is absent (HANDOFF.md "Assumption recorded"). That's a defensible product decision, but it means X's encrypted export is *unavailable* on the exact origin the spec targets (`file://`). Y hand-writes pure-JS AES-256-GCM + PBKDF2 fallback so encrypted export actually works on `file://` — but at **46s for 250k iterations** (documented). Y's build is cleaner (modules → inlined artifact, `build.mjs --check`), fixed 2 real data-loss bugs found by its own e2e (Clear-never-persisted; IDB→memory skipped localStorage cache — both genuinely nasty). Y's advantage is real but its 46s KDF on the target origin is a UX landmine; X's "refuse" is honest but functionally incomplete for the stated environment. Neither is 9+. X also has a mid-flight pivot absorbed cleanly (LMS-style additive evidence in HANDOFF). Slight edge Y for actually shipping working crypto on the target origin + the two caught data-loss bugs.
+
+### 2. Evidence quality — X: 8, Y: 6
+
+X's `HANDOFF.md` is a genuine cheap-verification document: a 4-step orientation block ("read README → DESIGN → run `bash tests/run.sh` → open file"), explicit "48/48 verified by a real run", **and a falsification ritual** — "restoring the pre-fix `app/retro.html` (`git show HEAD:...`) makes exactly the two regression tests fail" (HANDOFF.md, Baton 3 hardening §). That's exactly what a skeptical reviewer wants: a documented way to prove the tests *bite*. One oracle false-negative was X's, but the harness corrected it and X passes — disclosed.
+
+Y's HANDOFF is more *verbose* but dresses up state: it's a 3rd-person summary of a 10-session, crash-and-cap-marred run, and it **admits it doesn't literally satisfy its own TASK-004/005 criteria** ("No golden fixture… `tests/unit/markdown.test.mjs` does not exist… TASK-005's criterion asked for P1–P13… Either renumber the suite to match the spec or amend the spec"). That honesty is good, but it means the evidence is *incomplete against its own spec* and the reviewer must now re-litigate criteria. Its e2e requires a local Chrome (skips loudly — good) and the 54/54 claim rests on a `test/smoke.test.mjs` shim because `node --test tests/` is broken on Node 22. Y wins on *depth* (real-browser CDP e2e, 1600 lines), loses on *cheap verifiability* — its own doc says criteria are unmet. X's evidence is smaller but tighter and self-falsifying.
+
+### 3. Continuity behavior — X: 9, Y: 7
+
+This is the core criterion and X wins decisively. **3 sessions, 133 turns, all 3 ended with a deliberate finish.** X absorbed a mid-flight pivot (encrypted export/import) in Baton 2 and *documented the bounded assumption* ("WebCrypto required; if `crypto.subtle` missing, export refuses"). Its HANDOFF is written *for a zero-memory agent* ("Read this first… Do not trust memory; verify") and even records gotchas for the next author (jsdom setInterval hanging the process; shared storage backend for reload simulation; stdin flakiness). That is exactly the relay-survival artifact the benchmark is testing.
+
+Y's continuity *survived* but by brute force: **10 sessions, 773 turns, ~806 tool calls, 1 clean finish**; other sessions hit the 80-call harness cap and resumed from on-disk state. Yes — the sidecar/ledger approach let it recover from disk each time (that's the point of Arm Y's tooling), but the ledger had to be re-read and re-orient every baton, and the final HANDOFF still can't close its own criteria. Recovery worked; *efficiency of recovery* did not. Y's structured continuity is real (task ledger, `ckpt-baton3-final`, per-criterion evidence) but the outcome is a doc that says "3 literal gaps remain." X's leaner handoff produced a *finished, closed* handoff.
+
+### 4. Cost efficiency — X: 9, Y: 4
+
+Brutal numbers: **X = 3 sessions / 133 turns / ~134 tool calls / 3 clean finishes.** **Y = 10 sessions / 773 turns / ~806 tool calls / 1 clean finish + repeated 80-call cap hits.** Y spent **~5.8× the turns** and **~3.3× the sessions** for +1 artifact point and *worse* evidence honesty (criteria self-admittedly unmet). Y also burned a session on a harness crash retry. X finished every baton deliberately — no caps, no crashes. The context-recovery command and sidecar ledger apparently cost more (in re-orientation turns per baton) than a tight HANDOFF.md saved. This is the most lopsided dimension.
+
+---
+
+## Verdict
+
+**I would trust Arm X's approach for a multi-week project — but with a note that Arm Y built the better artifact.** The benchmark is *about the relay*, and X proves the relay discipline: 3/3 batons ended with a deliberate finish, the pivot was absorbed with a recorded bounded assumption, and the HANDOFF is written for a zero-memory reader with a falsification ritual (`git show HEAD:...` must break exactly the 2 regression tests — HANDOFF.md, Baton 3). A skeptical reviewer can verify X in ~60 seconds by running `bash tests/run.sh` and re-running that one falsification. Arm Y's structured continuity tooling *did* survive context loss (10 sessions, mid-flight pivot) and its e2e caught 2 genuine data-loss bugs — but it cost 773 turns / 806 tool calls and still hands over a doc admitting "$TASK-004/005 criteria not literally satisfied" (Y `HANDOFF.md`, "What remains"). Y's sidecar/ledger approach pays for itself only if the project is long enough that re-orientation cost amortizes; at this benchmark's scale, X's lean, self-falsifying handoff beats it on the three dimensions the relay is actually graded on (verify cheaply, finish deliberately, don't burn tokens). If I were staffing a 6-week multi-agent build I'd take **X's handoff contract** (orientation-first, falsifiable proofs, bounded assumptions log) and **Y's test depth** (real-browser CDP + pure-JS crypto fallback) — but forced to pick one *approach to trust*, it's X.

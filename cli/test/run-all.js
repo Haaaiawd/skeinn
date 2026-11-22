@@ -1445,6 +1445,68 @@ test('v3.0 freeform finding scopes (task: prefix, compound) gate focus and surfa
   assert((focused2.pinned_advisories || []).some((a) => a.includes('FND-002')), `compound scope must surface advisory at focus, got ${JSON.stringify(focused2.pinned_advisories)}`);
 });
 
+test('v3.0 adversarial hardening: .skeinnignore cannot self-hide and ledger tampering is loud', () => {
+  const root = initGitFixture();
+  runWithStdin(root, ['task', 'plan', '--stdin'], JSON.stringify({
+    tasks: [
+      { title: 'Work one', outcome: 'First delivery output exists on disk for real', acceptance: [{ criterion: 'file exists', verify_by: 'ls' }], boundaries: ['no scope creep'], reads: ['.skeinn/PROJECT.md'], implements: '.skeinn/design/core.md' },
+      { title: 'Work two', outcome: 'Second delivery output exists on disk for real', acceptance: [{ criterion: 'file exists', verify_by: 'ls' }], boundaries: ['no scope creep'], depends_on: ['TASK-001'], reads: ['.skeinn/PROJECT.md'], implements: '.skeinn/design/core.md' },
+    ],
+  }));
+  const ready = JSON.parse(run(root, ['project', 'ready']));
+  json(root, 'skip-or-launch.json', { run_id: 'adv-launch-1', prepared_digest: ready.digest, verdict: 'passed', summary: 'launch ok', evidence: ['reviewed'], review: independentReview('adv-reviewer') });
+  run(root, ['keeper', 'record', '--json-file', 'skip-or-launch.json']);
+
+  // Attack 1: .skeinnignore `*` must not hide itself; modifying it triggers the heavy gate.
+  writeFileSync(join(root, '.skeinnignore'), '*\n', 'utf8');
+  writeFileSync(join(root, 'src', 'evil.js'), 'forged\n', 'utf8');
+  const w = JSON.parse(run(root, ['check']));
+  assert(w.review_window.files.includes('.skeinnignore'), `skeinnignore must stay visible in window, got ${JSON.stringify(w.review_window.files)}`);
+  assert(w.review_window.level === 'heavy', `broadened ignore config must force heavy window, got ${w.review_window.level}`);
+  const closeErr = run(root, ['task', 'close', 'TASK-001', '--evidence', 'did the work'], 1);
+  assert(closeErr.includes('review window is heavy'), `close must refuse under poisoned ignore config: ${closeErr}`);
+
+  // Recover: drop the poisoned ignore, checkpoint clean, close legitimately.
+  rmSync(join(root, '.skeinnignore'));
+  json(root, 'chk.json', { run_id: 'adv-chk-1', verdict: 'clean', summary: 'audited window', evidence: ['re-ran checks'], review: independentReview('adv-reviewer') });
+  run(root, ['keeper', 'record', '--checkpoint', '--json-file', 'chk.json']);
+  run(root, ['task', 'focus', 'TASK-001']);
+  run(root, ['task', 'close', 'TASK-001', '--evidence', 'real work verified']);
+
+  // Attack 2: direct tasks.json status forgery is flagged by the missing-metadata sentinel.
+  const tasksPath = join(root, '.skeinn', 'tasks.json');
+  const forged = JSON.parse(readFileSync(tasksPath, 'utf8'));
+  forged.tasks.find((t) => t.id === 'TASK-002').status = 'done';
+  writeFileSync(tasksPath, JSON.stringify(forged, null, 2), 'utf8');
+  const w2 = JSON.parse(run(root, ['check']));
+  assert(w2.warnings.some((x) => x.includes('TASK-002') && x.includes('ledger edit')), `forged done must be flagged: ${JSON.stringify(w2.warnings)}`);
+
+  // Attack 3: deleting findings leaves sequence-gap evidence.
+  const statePath = join(root, '.skeinn', 'state.json');
+  const st = JSON.parse(readFileSync(statePath, 'utf8'));
+  st.keeper.findings = [
+    { id: 'FND-001', text: 'a', status: 'open', severity: 'minor', scope: 'task:TASK-001' },
+    { id: 'FND-003', text: 'b', status: 'open', severity: 'minor', scope: 'task:TASK-001' },
+  ];
+  writeFileSync(statePath, JSON.stringify(st, null, 2), 'utf8');
+  const w3 = JSON.parse(run(root, ['check']));
+  assert(w3.warnings.some((x) => x.includes('sequence gaps')), `findings gap must be flagged: ${JSON.stringify(w3.warnings)}`);
+
+  // Attack 4: keeper reset disarm + closes before re-launch is flagged.
+  run(root, ['keeper', 'reset', '--reason', 'deliberate gate disarm for test']);
+  runWithStdin(root, ['task', 'plan', '--stdin'], JSON.stringify({
+    tasks: [
+      { title: 'Work one', outcome: 'First delivery output exists on disk for real', acceptance: [{ criterion: 'file exists', verify_by: 'ls' }], boundaries: ['no scope creep'], reads: ['.skeinn/PROJECT.md'], implements: '.skeinn/design/core.md' },
+      { title: 'Work two', outcome: 'Second delivery output exists on disk for real', acceptance: [{ criterion: 'file exists', verify_by: 'ls' }], boundaries: ['no scope creep'], depends_on: ['TASK-001'], reads: ['.skeinn/PROJECT.md'], implements: '.skeinn/design/core.md' },
+      { title: 'Pivot task', outcome: 'Pivoted delivery output exists on disk for real', acceptance: [{ criterion: 'file exists', verify_by: 'ls' }], boundaries: ['no scope creep'], depends_on: ['TASK-001'], reads: ['.skeinn/PROJECT.md'], implements: '.skeinn/design/core.md' },
+    ],
+  }));
+  run(root, ['task', 'focus', 'TASK-003']);
+  run(root, ['task', 'close', 'TASK-003', '--evidence', 'closed during disarm']);
+  const w4 = JSON.parse(run(root, ['check']));
+  assert(w4.warnings.some((x) => x.includes('gate was disarmed')), `disarmed closes must be flagged: ${JSON.stringify(w4.warnings)}`);
+});
+
 for (const root of roots) rmSync(root, { recursive: true, force: true });
 
 if (process.exitCode) {
